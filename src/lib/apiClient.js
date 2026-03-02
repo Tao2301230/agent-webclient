@@ -100,6 +100,31 @@ export function getAgents() {
   return requestJson('/api/ap/agents');
 }
 
+export function getAgent(agentKey) {
+  const query = toQueryString({ agentKey });
+  return requestJson(query ? `/api/ap/agent?${query}` : '/api/ap/agent');
+}
+
+export function getSkills(tag) {
+  const query = toQueryString({ tag });
+  return requestJson(query ? `/api/ap/skills?${query}` : '/api/ap/skills');
+}
+
+export function getSkill(skillId) {
+  const query = toQueryString({ skillId });
+  return requestJson(query ? `/api/ap/skill?${query}` : '/api/ap/skill');
+}
+
+export function getTools({ tag, kind } = {}) {
+  const query = toQueryString({ tag, kind });
+  return requestJson(query ? `/api/ap/tools?${query}` : '/api/ap/tools');
+}
+
+export function getTool(toolName) {
+  const query = toQueryString({ toolName });
+  return requestJson(query ? `/api/ap/tool?${query}` : '/api/ap/tool');
+}
+
 export function getChats() {
   return requestJson('/api/ap/chats');
 }

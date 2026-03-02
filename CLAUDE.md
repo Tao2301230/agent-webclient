@@ -135,17 +135,37 @@
 
 ### 6.1 `GET /api/ap/agents`
 
-前端依赖：`key`、`name`。
+返回 `AgentSummary[]`，顶层字段：`key/name/icon/description/role/meta`。
 
-### 6.2 `GET /api/ap/chats`
+### 6.2 `GET /api/ap/agent?agentKey=...`
+
+返回 `AgentDetail`，顶层字段：`key/name/icon/description/role/instructions/meta`。
+
+### 6.3 `GET /api/ap/skills?tag=...`
+
+返回 `SkillSummary[]`，字段：`key/name/description/meta.promptTruncated`。
+
+### 6.4 `GET /api/ap/skill?skillId=...`
+
+返回 `SkillDetail`，字段：`key/name/description/instructions/meta.promptTruncated`。
+
+### 6.5 `GET /api/ap/tools?tag=...&kind=backend|frontend|action`
+
+返回 `ToolSummary[]`，字段：`key/name/description/meta(kind/toolType/toolApi/viewportKey/strict)`。
+
+### 6.6 `GET /api/ap/tool?toolName=...`
+
+返回 `ToolDetail`，字段：`key/name/description/afterCallHint/parameters/meta`。
+
+### 6.7 `GET /api/ap/chats`
 
 前端依赖：`chatId`、`chatName`、`firstAgentName`、`firstAgentKey`、`updatedAt`。
 
-### 6.3 `GET /api/ap/chat?chatId=...&includeRawMessages=true?`
+### 6.8 `GET /api/ap/chat?chatId=...&includeRawMessages=true?`
 
 前端依赖：`events`；调试可选 `rawMessages/messages`。
 
-### 6.4 `POST /api/ap/query`
+### 6.9 `POST /api/ap/query`
 
 当前发送路径必需字段：
 - `message`
@@ -156,13 +176,20 @@
 
 响应必须是 `text/event-stream`。
 
-### 6.5 `GET /api/ap/viewport?viewportKey=...`
+### 6.10 `GET /api/ap/viewport?viewportKey=...`
 
 前端依赖：`data.html`。
 
-### 6.6 `POST /api/ap/submit`
+### 6.11 `POST /api/ap/submit`
 
 请求体：`runId`、`toolId`、`params`。
+
+### 6.12 HTTP 400 约定（透传后端 msg）
+
+- `/api/ap/skill` 未命中 `skillId` 返回 HTTP `400`（`ApiResponse.failure`）。
+- `/api/ap/tool` 未命中 `toolName` 返回 HTTP `400`（`ApiResponse.failure`）。
+- `/api/ap/tools` 的 `kind` 非 `backend|frontend|action` 返回 HTTP `400`（`ApiResponse.failure`）。
+- 前端不做语义改写，直接透传后端 `msg` 到 `ApiError.message`。
 
 ## 7. Token 策略（强约束）
 

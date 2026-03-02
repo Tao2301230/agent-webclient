@@ -4,6 +4,9 @@ AGENT 协议调试前端（Vanilla JS + Vite）。
 
 用于联调与观察：
 - `/api/ap/query` SSE 流事件
+- `/api/ap/agents`、`/api/ap/agent` Agent 列表与详情
+- `/api/ap/skills`、`/api/ap/skill` Skill 列表与详情
+- `/api/ap/tools`、`/api/ap/tool` Tool 列表与详情
 - `/api/ap/chats`、`/api/ap/chat` 会话与历史回放
 - `/api/ap/viewport` 视图渲染
 - `/api/ap/submit` 前端工具回传
@@ -110,6 +113,16 @@ AGENT_API_TARGET=http://127.0.0.1:8080 PORT=5173 npm run dev
 1. 输入区切换为 iframe 工具视图。
 2. 自动拉取 `/api/ap/viewport?viewportKey=...`。
 3. 由 iframe 通过 `frontend_submit` 回传参数。
+
+### 3.7 Agent / Skill / Tool 联调契约
+
+- `GET /api/ap/agents`：`AgentSummary[]`，字段含 `key/name/icon/description/role/meta`。
+- `GET /api/ap/agent?agentKey=...`：`AgentDetail`，字段含 `key/name/icon/description/role/instructions/meta`。
+- `GET /api/ap/skills?tag=...`：`SkillSummary[]`，字段含 `meta.promptTruncated`。
+- `GET /api/ap/skill?skillId=...`：`SkillDetail`，字段含 `meta.promptTruncated`。
+- `GET /api/ap/tools?tag=...&kind=backend|frontend|action`：`ToolSummary[]`，字段含 `meta(kind/toolType/toolApi/viewportKey/strict)`。
+- `GET /api/ap/tool?toolName=...`：`ToolDetail`，字段含 `key/name/description/afterCallHint/parameters/meta`。
+- `GET /api/ap/skill` 未命中 `skillId`、`GET /api/ap/tool` 未命中 `toolName`、`GET /api/ap/tools` 的 `kind` 非法时，返回 HTTP `400`（`ApiResponse.failure`）。
 
 ## 4. Docker 运行
 

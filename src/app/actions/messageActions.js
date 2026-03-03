@@ -1,3 +1,5 @@
+import { ACCESS_TOKEN_STORAGE_KEY } from '../context/constants.js';
+
 export function createMessageActions(ctx) {
   const { state, elements, services } = ctx;
 
@@ -238,6 +240,11 @@ export function createMessageActions(ctx) {
     state.accessToken = normalized.token;
     elements.accessTokenInput.value = normalized.token;
     services.setAccessToken(normalized.token);
+    try {
+      window.localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, normalized.token);
+    } catch (_error) {
+      // Ignore storage failures and keep in-memory token behavior.
+    }
     ctx.ui.clearAccessTokenError();
 
     ctx.ui.setStatus('Access Token 已应用，正在刷新 agents/chats...');
@@ -254,6 +261,11 @@ export function createMessageActions(ctx) {
     state.accessToken = '';
     elements.accessTokenInput.value = '';
     services.setAccessToken('');
+    try {
+      window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+    } catch (_error) {
+      // Ignore storage failures and keep in-memory token behavior.
+    }
     state.agents = [];
     state.chats = [];
     ctx.actions.startNewChat();

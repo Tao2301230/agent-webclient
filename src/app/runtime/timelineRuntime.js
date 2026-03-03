@@ -84,7 +84,8 @@ export function createTimelineRuntime(ctx) {
     }
     try {
       const url = new URL(src, window.location.origin);
-      return url.origin === window.location.origin && url.pathname === '/api/ap/data';
+      const baseUrlObj = new URL('/', window.location.origin);
+      return url.origin === baseUrlObj.origin && url.pathname.endsWith('/api/ap/data');
     } catch (_error) {
       return false;
     }

@@ -30,6 +30,7 @@ import { createChatActions } from './actions/chatActions.js';
 import { createMessageActions } from './actions/messageActions.js';
 import { createAgentEventHandler } from './handlers/agentEventHandler.js';
 import { bindDomEvents } from './handlers/domEvents.js';
+import { ACCESS_TOKEN_STORAGE_KEY } from './context/constants.js';
 
 export function createBootstrapContext() {
   const ctx = createAppContext();
@@ -127,9 +128,16 @@ export async function bootstrapApp() {
   ui.setSettingsOpen(false);
   ui.syncDrawerState();
 
-  state.accessToken = '';
-  elements.accessTokenInput.value = '';
-  services.setAccessToken('');
+  let persistedToken = '';
+  try {
+    persistedToken = String(window.localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY) || '').trim();
+  } catch (_error) {
+    persistedToken = '';
+  }
+
+  state.accessToken = persistedToken;
+  elements.accessTokenInput.value = persistedToken;
+  services.setAccessToken(persistedToken);
   ui.clearAccessTokenError();
 
   if (!state.accessToken) {

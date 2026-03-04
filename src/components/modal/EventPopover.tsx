@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useAppState, useAppDispatch } from "../../app/context/AppContext";
+import { useAppState, useAppDispatch } from "../../context/AppContext";
 
 export const EventPopover: React.FC = () => {
 	const state = useAppState();

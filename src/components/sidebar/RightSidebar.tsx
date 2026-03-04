@@ -1,8 +1,8 @@
 import React, { useMemo } from "react";
-import { useAppState, useAppDispatch } from "../../app/context/AppContext";
-import type { AgentEvent, ToolState } from "../../app/context/types";
-import type { DebugTab } from "../../app/context/constants";
-import { DEBUG_TABS } from "../../app/context/constants";
+import { useAppState, useAppDispatch } from "../../context/AppContext";
+import type { AgentEvent, ToolState } from "../../context/types";
+import type { DebugTab } from "../../context/constants";
+import { DEBUG_TABS } from "../../context/constants";
 
 function safeStr(v: unknown): string {
 	if (typeof v === "string") return v;

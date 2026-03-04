@@ -1,7 +1,7 @@
 import React, { useRef, useCallback, useState, useEffect } from "react";
-import { useAppState, useAppDispatch } from "../../app/context/AppContext";
+import { useAppState, useAppDispatch } from "../../context/AppContext";
 import { MentionSuggest } from "./MentionSuggest";
-import { COMPOSER_MAX_LINES } from "../../app/context/constants";
+import { COMPOSER_MAX_LINES } from "../../context/constants";
 import { createRequestId, interruptChat, steerChat } from "../../lib/apiClient";
 import { parseLeadingMentionDraft } from "../../lib/mentionParser";
 
@@ -188,7 +188,9 @@ export const ComposerArea: React.FC = () => {
 	const resolveCurrentAgentKey = useCallback(() => {
 		const chatId = String(state.chatId || "").trim();
 		if (chatId) {
-			const remembered = String(state.chatAgentById.get(chatId) || "").trim();
+			const remembered = String(
+				state.chatAgentById.get(chatId) || "",
+			).trim();
 			if (remembered) return remembered;
 		}
 		return String(state.pendingNewChatAgentKey || "").trim();
@@ -230,7 +232,14 @@ export const ComposerArea: React.FC = () => {
 			dispatch({ type: "SET_STREAMING", streaming: false });
 			dispatch({ type: "SET_ABORT_CONTROLLER", controller: null });
 		}
-	}, [dispatch, resolveCurrentRunId, resolveCurrentAgentKey, state.chatId, state.abortController, state.planningMode]);
+	}, [
+		dispatch,
+		resolveCurrentRunId,
+		resolveCurrentAgentKey,
+		state.chatId,
+		state.abortController,
+		state.planningMode,
+	]);
 
 	const handleSteer = useCallback(async () => {
 		const message = state.steerDraft.trim();

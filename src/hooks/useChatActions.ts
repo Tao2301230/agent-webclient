@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { useAppContext } from '../app/context/AppContext';
+import { useAppContext } from '../context/AppContext';
 import { getAgents, getChats, getChat, setAccessToken } from '../lib/apiClient';
-import type { Chat, Agent, AgentEvent, TimelineNode, Plan, PlanRuntime, ToolState } from '../app/context/types';
+import type { Chat, Agent, AgentEvent, TimelineNode, Plan, PlanRuntime, ToolState } from '../context/types';
 import { parseContentSegments } from '../lib/contentSegments';
 import { parseFrontendToolParams } from '../lib/frontendToolParams';
 

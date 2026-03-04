@@ -1,5 +1,5 @@
 import React from "react";
-import { useAppState, useAppDispatch } from "../../app/context/AppContext";
+import { useAppState, useAppDispatch } from "../../context/AppContext";
 
 export const PlanPanel: React.FC = () => {
 	const state = useAppState();

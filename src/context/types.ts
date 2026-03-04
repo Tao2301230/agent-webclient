@@ -1,6 +1,6 @@
 import type { DebugTab, LayoutMode } from './constants';
-import type { ContentSegment } from '../../lib/contentSegments';
-import type { ActionRuntime } from '../../lib/actionRuntime';
+import type { ContentSegment } from '../lib/contentSegments';
+import type { ActionRuntime } from '../lib/actionRuntime';
 
 /* ============================================
    Agent Event

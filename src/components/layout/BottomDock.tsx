@@ -1,5 +1,5 @@
 import React from "react";
-import { useAppState } from "../../app/context/AppContext";
+import { useAppState } from "../../context/AppContext";
 import { ComposerArea } from "../composer/ComposerArea";
 import { PlanPanel } from "../plan/PlanPanel";
 import { FrontendToolContainer } from "../frontend-tool/FrontendToolContainer";

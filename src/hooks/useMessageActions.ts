@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { useAppContext } from '../app/context/AppContext';
+import { useAppContext } from '../context/AppContext';
 import { useAgentEventHandler } from './useAgentEventHandler';
 import {
   createRequestId,
@@ -8,7 +8,7 @@ import {
 } from '../lib/apiClient';
 import { consumeJsonSseStream } from '../lib/sseParser';
 import { parseLeadingAgentMention } from '../lib/mentionParser';
-import type { AgentEvent } from '../app/context/types';
+import type { AgentEvent } from '../context/types';
 
 /**
  * useMessageActions — handles sending messages and processing SSE stream.

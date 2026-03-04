@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { createActionRuntime, safeJsonParse, type ActionRuntime } from '../lib/actionRuntime';
-import { useAppContext } from '../app/context/AppContext';
-import type { AgentEvent } from '../app/context/types';
+import { useAppContext } from '../context/AppContext';
+import type { AgentEvent } from '../context/types';
 
 interface ActionBufferState {
   actionName: string;
@@ -43,7 +43,7 @@ export function useActionRuntime() {
 
   /* 1. Initialize ActionRuntime based on DOM elements */
   useEffect(() => {
-      // We defer initialization slightly to ensure all DOM nodes are mounted
+    // We defer initialization slightly to ensure all DOM nodes are mounted
     const initTimer = setTimeout(() => {
       const root = document.documentElement;
       const canvas = document.getElementById('fireworks-canvas') as HTMLCanvasElement;

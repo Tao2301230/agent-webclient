@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useMemo } from "react";
-import { useAppState } from "../../app/context/AppContext";
+import { useAppState } from "../../context/AppContext";
 import { TimelineRow } from "./TimelineRow";
 
 export const ConversationStage: React.FC = () => {
@@ -8,9 +8,7 @@ export const ConversationStage: React.FC = () => {
 	const autoScrollEnabledRef = useRef(true);
 
 	const isNearBottom = (el: HTMLDivElement, threshold = 24): boolean => {
-		return (
-			el.scrollHeight - el.scrollTop - el.clientHeight <= threshold
-		);
+		return el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
 	};
 
 	const scrollToBottom = (behavior: ScrollBehavior = "auto") => {

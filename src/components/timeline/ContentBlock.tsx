@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import type { TimelineNode } from "../../app/context/types";
+import type { TimelineNode } from "../../context/types";
 import { MarkdownContent } from "../markdown/MarkdownContent";
 import { ViewportEmbed } from "./ViewportEmbed";
 

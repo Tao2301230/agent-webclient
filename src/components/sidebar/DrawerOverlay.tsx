@@ -1,5 +1,5 @@
 import React from "react";
-import { useAppDispatch } from "../../app/context/AppContext";
+import { useAppDispatch } from "../../context/AppContext";
 
 export const DrawerOverlay: React.FC = () => {
 	const dispatch = useAppDispatch();

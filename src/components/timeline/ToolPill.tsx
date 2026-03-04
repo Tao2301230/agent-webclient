@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import type { TimelineNode } from "../../app/context/types";
+import type { TimelineNode } from "../../context/types";
 
 interface ToolPillProps {
 	node: TimelineNode;

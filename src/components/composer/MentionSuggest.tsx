@@ -1,5 +1,5 @@
 import React from "react";
-import { useAppState, useAppDispatch } from "../../app/context/AppContext";
+import { useAppState, useAppDispatch } from "../../context/AppContext";
 
 export const MentionSuggest: React.FC = () => {
 	const state = useAppState();
@@ -28,7 +28,9 @@ export const MentionSuggest: React.FC = () => {
 							dispatch({ type: "SET_MENTION_OPEN", open: false });
 						}}
 					>
-						<span className="mention-name">{agent.name || agent.key}</span>
+						<span className="mention-name">
+							{agent.name || agent.key}
+						</span>
 					</button>
 				))}
 			</div>

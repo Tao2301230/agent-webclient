@@ -1,10 +1,10 @@
 import React, { useRef, useCallback, useEffect } from "react";
-import { useAppState, useAppDispatch } from "../../app/context/AppContext";
+import { useAppState, useAppDispatch } from "../../context/AppContext";
 import {
 	DESKTOP_FIXED_BREAKPOINT,
 	MOBILE_BREAKPOINT,
-} from "../../app/context/constants";
-import type { LayoutMode } from "../../app/context/constants";
+} from "../../context/constants";
+import type { LayoutMode } from "../../context/constants";
 import { AtmosphereLayer } from "./AtmosphereLayer";
 import { TopNav } from "./TopNav";
 import { BottomDock } from "./BottomDock";

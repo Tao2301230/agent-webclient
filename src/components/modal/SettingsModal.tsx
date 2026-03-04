@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { useAppState, useAppDispatch } from "../../app/context/AppContext";
-import { ACCESS_TOKEN_STORAGE_KEY } from "../../app/context/constants";
+import { useAppState, useAppDispatch } from "../../context/AppContext";
+import { ACCESS_TOKEN_STORAGE_KEY } from "../../context/constants";
 import { setAccessToken } from "../../lib/apiClient";
 
 export const SettingsModal: React.FC = () => {

@@ -1,10 +1,10 @@
 import React, { useMemo } from "react";
-import { useAppState, useAppDispatch } from "../../app/context/AppContext";
+import { useAppState, useAppDispatch } from "../../context/AppContext";
 import {
 	pickChatAgentLabel,
 	formatChatTimeLabel,
 } from "../../lib/chatListFormatter";
-import type { Chat } from "../../app/context/types";
+import type { Chat } from "../../context/types";
 
 const ChatItem: React.FC<{
 	chat: Chat;

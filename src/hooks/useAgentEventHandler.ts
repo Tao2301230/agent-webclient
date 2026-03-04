@@ -1,9 +1,9 @@
 import { useCallback, useRef } from 'react';
-import { useAppContext } from '../app/context/AppContext';
-import type { AgentEvent, TimelineNode, ToolState } from '../app/context/types';
+import { useAppContext } from '../context/AppContext';
+import type { AgentEvent, TimelineNode, ToolState } from '../context/types';
 import { parseContentSegments } from '../lib/contentSegments';
 import { parseFrontendToolParams } from '../lib/frontendToolParams';
-import { FRONTEND_VIEWPORT_TYPES } from '../app/context/constants';
+import { FRONTEND_VIEWPORT_TYPES } from '../context/constants';
 
 /**
  * Safely extract a string value from an event field.

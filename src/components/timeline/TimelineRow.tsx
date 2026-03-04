@@ -1,5 +1,5 @@
 import React from "react";
-import type { TimelineNode } from "../../app/context/types";
+import type { TimelineNode } from "../../context/types";
 import { UserBubble } from "./UserBubble";
 import { ThinkingBlock } from "./ThinkingBlock";
 import { ToolPill } from "./ToolPill";

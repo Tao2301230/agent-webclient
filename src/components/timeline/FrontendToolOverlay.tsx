@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useAppState, useAppDispatch } from "../../app/context/AppContext";
+import { useAppState, useAppDispatch } from "../../context/AppContext";
 import { getViewport } from "../../lib/apiClient";
-import { FRONTEND_VIEWPORT_TYPES } from "../../app/context/constants";
+import { FRONTEND_VIEWPORT_TYPES } from "../../context/constants";
 
 /**
  * FrontendToolOverlay — renders an active frontend tool in a full-overlay iframe.

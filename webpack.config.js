@@ -38,8 +38,17 @@ module.exports = (env, argv) => {
           ],
         },
         {
-          test: /\.(png|jpe?g|gif|svg|woff2?|eot|ttf|otf)$/i,
+          test: /\.(png|jpe?g|gif|svg)$/i,
           type: 'asset/resource',
+        },
+        {
+          test: /\.(woff2?|eot|ttf|otf)$/i,
+          type: 'asset/resource',
+          generator: {
+            filename: isProd
+              ? 'fonts/[name].[contenthash:8][ext][query]'
+              : 'fonts/[name][ext][query]',
+          },
         },
       ],
     },

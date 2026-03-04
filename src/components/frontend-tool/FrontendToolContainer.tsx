@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useAppState, useAppDispatch } from "../../app/context/AppContext";
+import { useAppState, useAppDispatch } from "../../context/AppContext";
 import { getViewport, submitTool } from "../../lib/apiClient";
 
 export const FrontendToolContainer: React.FC = () => {
@@ -118,7 +118,10 @@ export const FrontendToolContainer: React.FC = () => {
 					if (accepted) {
 						setStatusText(`提交成功：${detail}`);
 						setStatusTone("ok");
-						dispatch({ type: "SET_ACTIVE_FRONTEND_TOOL", tool: null });
+						dispatch({
+							type: "SET_ACTIVE_FRONTEND_TOOL",
+							tool: null,
+						});
 					} else {
 						setStatusText(`提交未命中：${detail}`);
 						setStatusTone("err");

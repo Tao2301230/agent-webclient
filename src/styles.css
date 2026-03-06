@@ -520,11 +520,11 @@ textarea {
   white-space: normal;
 }
 
-.timeline-markdown > :first-child {
+.timeline-markdown> :first-child {
   margin-top: 0;
 }
 
-.timeline-markdown > :last-child {
+.timeline-markdown> :last-child {
   margin-bottom: 0;
 }
 
@@ -699,7 +699,7 @@ textarea {
   background: color-mix(in srgb, var(--bg-elev-2) 92%, var(--bg-input));
 }
 
-.tool-section + .tool-section {
+.tool-section+.tool-section {
   margin-top: 6px;
 }
 
@@ -1211,6 +1211,8 @@ select {
   border: 1px solid color-mix(in srgb, var(--line-soft) 94%, transparent);
   background: color-mix(in srgb, var(--bg-input) 84%, var(--bg-elev-2));
   padding: 10px;
+  max-height: 80px;
+  overflow: hidden;
 }
 
 .chat-item.is-active {
@@ -1489,7 +1491,7 @@ select {
   font-size: 12px;
 }
 
-.field-group.is-error > label {
+.field-group.is-error>label {
   color: var(--accent-danger);
 }
 
@@ -1828,6 +1830,7 @@ select {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   *,
   *::before,
   *::after {
@@ -1839,6 +1842,7 @@ select {
 }
 
 @keyframes status-pulse {
+
   0%,
   100% {
     transform: translateY(-50%) scale(1);

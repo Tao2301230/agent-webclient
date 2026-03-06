@@ -4,6 +4,7 @@ import type { AgentEvent, TimelineNode, ToolState } from '../context/types';
 import { parseContentSegments } from '../lib/contentSegments';
 import { parseFrontendToolParams } from '../lib/frontendToolParams';
 import { FRONTEND_VIEWPORT_TYPES } from '../context/constants';
+import { getVoiceRuntime } from '../lib/voiceRuntime';
 
 /**
  * Safely extract a string value from an event field.
@@ -99,6 +100,7 @@ export function useAgentEventHandler() {
       /* run.end / run.complete / run.error */
       if (type === 'run.end' || type === 'run.error' || type === 'run.complete') {
         dispatch({ type: 'SET_STREAMING', streaming: false });
+        getVoiceRuntime()?.stopAllVoiceSessions(type, { mode: 'commit' });
         if (type === 'run.error' && event.error) {
           const nodeId = `sys_${Date.now()}`;
           dispatch({
@@ -113,11 +115,12 @@ export function useAgentEventHandler() {
       /* content.start */
       if (type === 'content.start' && event.contentId) {
         const contentId = String(event.contentId);
+        const text = typeof event.text === 'string' ? event.text : '';
         if (!cache.contentNodeById.has(contentId)) {
           const nodeId = `content_${cache.counter++}`;
           cache.contentNodeById.set(contentId, nodeId);
-          const text = typeof event.text === 'string' ? event.text : '';
           cache.nodeText.set(nodeId, text);
+          const existingContentNode = state.timelineNodes.get(nodeId);
           dispatch({ type: 'INCREMENT_TIMELINE_COUNTER' });
           dispatch({ type: 'SET_CONTENT_NODE_BY_ID', contentId, nodeId });
           dispatch({ type: 'APPEND_TIMELINE_ORDER', id: nodeId });
@@ -126,10 +129,12 @@ export function useAgentEventHandler() {
             node: {
               id: nodeId, kind: 'content', contentId, text,
               segments: text ? parseContentSegments(contentId, text) : [],
+              ttsVoiceBlocks: existingContentNode?.ttsVoiceBlocks || {},
               ts: event.timestamp || Date.now(),
             },
           });
         }
+        getVoiceRuntime()?.processTtsVoiceBlocks(contentId, text, 'running', 'live');
         return;
       }
 
@@ -150,13 +155,16 @@ export function useAgentEventHandler() {
         const newText = prevText + delta;
         cache.nodeText.set(nodeId, newText);
         const segments = parseContentSegments(contentId, newText);
+        const existingNode = state.timelineNodes.get(nodeId);
         dispatch({
           type: 'SET_TIMELINE_NODE', id: nodeId,
           node: {
             id: nodeId, kind: 'content', contentId, text: newText, segments,
+            ttsVoiceBlocks: existingNode?.kind === 'content' ? (existingNode.ttsVoiceBlocks || {}) : {},
             ts: event.timestamp || Date.now(),
           },
         });
+        getVoiceRuntime()?.processTtsVoiceBlocks(contentId, newText, 'running', 'live');
         return;
       }
 
@@ -168,14 +176,17 @@ export function useAgentEventHandler() {
           const prevText = cache.nodeText.get(nodeId) || '';
           const finalText = typeof event.text === 'string' && event.text.trim() ? event.text : prevText;
           cache.nodeText.set(nodeId, finalText);
+          const existingNode = state.timelineNodes.get(nodeId);
           dispatch({
             type: 'SET_TIMELINE_NODE', id: nodeId,
             node: {
               id: nodeId, kind: 'content', contentId, text: finalText,
               segments: parseContentSegments(contentId, finalText),
+              ttsVoiceBlocks: existingNode?.kind === 'content' ? (existingNode.ttsVoiceBlocks || {}) : {},
               status: 'completed', ts: event.timestamp || Date.now(),
             },
           });
+          getVoiceRuntime()?.processTtsVoiceBlocks(contentId, finalText, 'completed', 'live');
         }
         return;
       }
@@ -193,14 +204,17 @@ export function useAgentEventHandler() {
         }
         const text = typeof event.text === 'string' ? event.text : '';
         cache.nodeText.set(nodeId, text);
+        const existingNode = state.timelineNodes.get(nodeId);
         dispatch({
           type: 'SET_TIMELINE_NODE', id: nodeId,
           node: {
             id: nodeId, kind: 'content', contentId, text,
             segments: parseContentSegments(contentId, text),
+            ttsVoiceBlocks: existingNode?.kind === 'content' ? (existingNode.ttsVoiceBlocks || {}) : {},
             status: 'completed', ts: event.timestamp || Date.now(),
           },
         });
+        getVoiceRuntime()?.processTtsVoiceBlocks(contentId, text, 'completed', 'live');
         return;
       }
 

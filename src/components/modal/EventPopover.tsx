@@ -1,5 +1,6 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAppState, useAppDispatch } from "../../context/AppContext";
+import { MaterialIcon } from "../common/MaterialIcon";
 
 export const EventPopover: React.FC = () => {
 	const state = useAppState();
@@ -62,6 +63,7 @@ export const EventPopover: React.FC = () => {
 			<div className="event-popover-head">
 				<strong>{event.type}</strong>
 				<button
+					aria-label="关闭事件详情"
 					onClick={() =>
 						dispatch({
 							type: "SET_EVENT_POPOVER",
@@ -71,7 +73,7 @@ export const EventPopover: React.FC = () => {
 						})
 					}
 				>
-					✕
+					<MaterialIcon name="close" />
 				</button>
 			</div>
 			<pre className="event-popover-body">{jsonStr}</pre>

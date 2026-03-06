@@ -1,5 +1,6 @@
 import React from "react";
 import { useAppState, useAppDispatch } from "../../context/AppContext";
+import { MaterialIcon } from "../common/MaterialIcon";
 
 export const TopNav: React.FC = () => {
 	const state = useAppState();
@@ -20,6 +21,7 @@ export const TopNav: React.FC = () => {
 					<button
 						id="open-left-drawer-btn"
 						className="icon-btn"
+						aria-label="打开对话列表"
 						onClick={() =>
 							dispatch({
 								type: "SET_LEFT_DRAWER_OPEN",
@@ -27,7 +29,7 @@ export const TopNav: React.FC = () => {
 							})
 						}
 					>
-						☰
+						<MaterialIcon name="menu" />
 					</button>
 					<div className="brand-mark">
 						<div className="brand-logo">A</div>
@@ -39,6 +41,49 @@ export const TopNav: React.FC = () => {
 				</div>
 
 				<div className="nav-group">
+					<div
+						className="mode-switch"
+						role="tablist"
+						aria-label="对话模式"
+					>
+						<button
+							className={`mode-btn ${state.conversationMode === "worker" ? "is-active" : ""}`}
+							type="button"
+							role="tab"
+							aria-selected={state.conversationMode === "worker"}
+							onClick={() =>
+								window.dispatchEvent(
+									new CustomEvent(
+										"agent:set-conversation-mode",
+										{
+											detail: { mode: "worker" },
+										},
+									),
+								)
+							}
+						>
+							员工
+						</button>
+						<button
+							className={`mode-btn ${state.conversationMode === "chat" ? "is-active" : ""}`}
+							type="button"
+							role="tab"
+							aria-selected={state.conversationMode === "chat"}
+							onClick={() =>
+								window.dispatchEvent(
+									new CustomEvent(
+										"agent:set-conversation-mode",
+										{
+											detail: { mode: "chat" },
+										},
+									),
+								)
+							}
+						>
+							聊天
+						</button>
+					</div>
+
 					<span
 						className={`status-pill ${statusClass}`}
 						id="api-status"
@@ -53,28 +98,51 @@ export const TopNav: React.FC = () => {
 							dispatch({ type: "RESET_CONVERSATION" });
 						}}
 					>
-						＋ 新对话
+						<MaterialIcon name="edit_square" />
+						<span>新对话</span>
 					</button>
 					<button
 						className="icon-btn"
 						id="settings-btn"
+						aria-label="打开设置"
 						onClick={() =>
 							dispatch({ type: "SET_SETTINGS_OPEN", open: true })
 						}
 					>
-						⚙
+						<MaterialIcon name="settings" />
 					</button>
 					<button
 						id="open-right-drawer-btn"
-						className="icon-btn"
-						onClick={() =>
+						className={`icon-btn ${state.layoutMode === "desktop-fixed" && state.desktopDebugSidebarEnabled ? "is-active" : ""}`}
+						aria-label={
+							state.layoutMode === "desktop-fixed"
+								? state.desktopDebugSidebarEnabled
+									? "关闭调试面板"
+									: "打开调试面板"
+								: "打开调试面板"
+						}
+						onClick={() => {
+							if (state.layoutMode === "desktop-fixed") {
+								dispatch({
+									type: "SET_DESKTOP_DEBUG_SIDEBAR_ENABLED",
+									enabled: !state.desktopDebugSidebarEnabled,
+								});
+								return;
+							}
+
 							dispatch({
 								type: "SET_RIGHT_DRAWER_OPEN",
 								open: !state.rightDrawerOpen,
-							})
-						}
+							});
+							if (state.layoutMode === "mobile-drawer") {
+								dispatch({
+									type: "SET_LEFT_DRAWER_OPEN",
+									open: false,
+								});
+							}
+						}}
 					>
-						≡
+						<MaterialIcon name="tune" />
 					</button>
 				</div>
 			</div>

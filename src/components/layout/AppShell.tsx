@@ -10,6 +10,7 @@ import { TopNav } from "./TopNav";
 import { BottomDock } from "./BottomDock";
 import { LeftSidebar } from "../sidebar/LeftSidebar";
 import { RightSidebar } from "../sidebar/RightSidebar";
+import { WorkerChatSidebar } from "../sidebar/WorkerChatSidebar";
 import { DrawerOverlay } from "../sidebar/DrawerOverlay";
 import { ConversationStage } from "../timeline/ConversationStage";
 import { SettingsModal } from "../modal/SettingsModal";
@@ -19,6 +20,7 @@ import { FireworksCanvas } from "../effects/FireworksCanvas";
 import { useChatActions } from "../../hooks/useChatActions";
 import { useMessageActions } from "../../hooks/useMessageActions";
 import { useActionRuntime } from "../../hooks/useActionRuntime";
+import { useVoiceRuntime } from "../../hooks/useVoiceRuntime";
 
 function inferLayoutMode(width: number): LayoutMode {
 	if (width >= DESKTOP_FIXED_BREAKPOINT) return "desktop-fixed";
@@ -35,6 +37,7 @@ export const AppShell: React.FC = () => {
 	useChatActions();
 	useMessageActions();
 	useActionRuntime();
+	useVoiceRuntime();
 
 	const layoutClass =
 		state.layoutMode === "desktop-fixed"
@@ -63,13 +66,14 @@ export const AppShell: React.FC = () => {
 	return (
 		<div
 			ref={appRef}
-			className={`app-shell ${layoutClass}`.trim()}
+			className={`app-shell ${layoutClass} ${state.desktopDebugSidebarEnabled ? "desktop-debug-enabled" : "desktop-debug-disabled"}`.trim()}
 			id="app"
 		>
 			<AtmosphereLayer />
 			<TopNav />
 			<LeftSidebar />
 			<ConversationStage />
+			<WorkerChatSidebar />
 			<RightSidebar />
 			<BottomDock />
 			{showOverlay && <DrawerOverlay />}

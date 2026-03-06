@@ -19,6 +19,9 @@ import type {
 	Plan,
 	ActiveFrontendTool,
 	ActionState,
+	Team,
+	WorkerRow,
+	WorkerConversationRow,
 } from "./types";
 import {
 	ACCESS_TOKEN_STORAGE_KEY,
@@ -38,6 +41,7 @@ function createInitialState(): AppState {
 
 	return {
 		agents: [],
+		teams: [],
 		chats: [],
 		chatAgentById: new Map(),
 		pendingNewChatAgentKey: "",
@@ -75,11 +79,18 @@ function createInitialState(): AppState {
 		},
 		activeReasoningKey: "",
 		chatFilter: "",
+		conversationMode: "worker",
+		workerSelectionKey: "",
+		workerRows: [],
+		workerIndexByKey: new Map(),
+		workerRelatedChats: [],
+		workerChatPanelCollapsed: true,
 		chatLoadSeq: 0,
 		settingsOpen: false,
 		activeDebugTab: "events",
 		leftDrawerOpen: false,
 		rightDrawerOpen: false,
+		desktopDebugSidebarEnabled: false,
 		layoutMode: "mobile-drawer",
 		planExpanded: false,
 		planManualOverride: null,
@@ -102,6 +113,7 @@ function createInitialState(): AppState {
    ============================================ */
 export type AppAction =
 	| { type: "SET_AGENTS"; agents: Agent[] }
+	| { type: "SET_TEAMS"; teams: Team[] }
 	| { type: "SET_CHATS"; chats: Chat[] }
 	| { type: "SET_CHAT_ID"; chatId: string }
 	| { type: "SET_RUN_ID"; runId: string }
@@ -124,6 +136,12 @@ export type AppAction =
 	| { type: "SET_RIGHT_DRAWER_OPEN"; open: boolean }
 	| { type: "SET_LAYOUT_MODE"; mode: LayoutMode }
 	| { type: "SET_CHAT_FILTER"; filter: string }
+	| { type: "SET_CONVERSATION_MODE"; mode: "chat" | "worker" }
+	| { type: "SET_WORKER_SELECTION_KEY"; workerKey: string }
+	| { type: "SET_WORKER_ROWS"; rows: WorkerRow[] }
+	| { type: "SET_WORKER_RELATED_CHATS"; chats: WorkerConversationRow[] }
+	| { type: "SET_WORKER_CHAT_PANEL_COLLAPSED"; collapsed: boolean }
+	| { type: "SET_DESKTOP_DEBUG_SIDEBAR_ENABLED"; enabled: boolean }
 	| { type: "SET_PENDING_NEW_CHAT_AGENT_KEY"; agentKey: string }
 	| { type: "SET_ACCESS_TOKEN"; token: string }
 	| { type: "SET_PLANNING_MODE"; enabled: boolean }
@@ -162,6 +180,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
 	switch (action.type) {
 		case "SET_AGENTS":
 			return { ...state, agents: action.agents };
+		case "SET_TEAMS":
+			return { ...state, teams: action.teams };
 		case "SET_CHATS":
 			return { ...state, chats: action.chats };
 		case "SET_CHAT_ID":
@@ -229,6 +249,32 @@ function appReducer(state: AppState, action: AppAction): AppState {
 			return { ...state, layoutMode: action.mode };
 		case "SET_CHAT_FILTER":
 			return { ...state, chatFilter: action.filter };
+		case "SET_CONVERSATION_MODE":
+			return { ...state, conversationMode: action.mode };
+		case "SET_WORKER_SELECTION_KEY":
+			return { ...state, workerSelectionKey: action.workerKey };
+		case "SET_WORKER_ROWS": {
+			const workerIndexByKey = new Map(
+				action.rows.map((row) => [row.key, row]),
+			);
+			const workerSelectionKey = workerIndexByKey.has(
+				state.workerSelectionKey,
+			)
+				? state.workerSelectionKey
+				: "";
+			return {
+				...state,
+				workerRows: action.rows,
+				workerIndexByKey,
+				workerSelectionKey,
+			};
+		}
+		case "SET_WORKER_RELATED_CHATS":
+			return { ...state, workerRelatedChats: action.chats };
+		case "SET_WORKER_CHAT_PANEL_COLLAPSED":
+			return { ...state, workerChatPanelCollapsed: action.collapsed };
+		case "SET_DESKTOP_DEBUG_SIDEBAR_ENABLED":
+			return { ...state, desktopDebugSidebarEnabled: action.enabled };
 		case "SET_PENDING_NEW_CHAT_AGENT_KEY":
 			return { ...state, pendingNewChatAgentKey: action.agentKey };
 		case "SET_ACCESS_TOKEN":
@@ -346,6 +392,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
 				},
 				activeReasoningKey: "",
 				activeFrontendTool: null,
+				workerRelatedChats: [],
+				workerChatPanelCollapsed: true,
 				steerDraft: "",
 				eventPopoverIndex: -1,
 				eventPopoverEventRef: null,

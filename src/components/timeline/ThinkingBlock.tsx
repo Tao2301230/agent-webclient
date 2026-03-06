@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import type { TimelineNode } from "../../context/types";
+import { MaterialIcon } from "../common/MaterialIcon";
 
 interface ThinkingBlockProps {
 	node: TimelineNode;
@@ -17,7 +18,7 @@ export const ThinkingBlock: React.FC<ThinkingBlockProps> = ({ node }) => {
 				className={`thinking-trigger ${expanded ? "is-open" : ""}`}
 				onClick={() => setExpanded(!expanded)}
 			>
-				<span className="chevron">▸</span>
+				<MaterialIcon name="chevron_right" className="chevron" />
 				{isLoading ? "思考中..." : "思考过程"}
 			</button>
 			<div className={`thinking-detail ${expanded ? "is-open" : ""}`}>

@@ -17,20 +17,37 @@ function formatLocalTime(date: Date): string {
 export interface ChatInfo {
   firstAgentName?: string;
   firstAgentKey?: string;
+  agentKey?: string;
   chatName?: string;
   chatId?: string;
   updatedAt?: string | number | Date;
 }
 
-export function pickChatAgentLabel(chat: ChatInfo): string {
+function findAgentNameByKey(agents: Array<{ key?: string; name?: string }>, candidateKey: string): string {
+  const normalizedKey = String(candidateKey || '').trim();
+  if (!normalizedKey) return '';
+  const matched = Array.isArray(agents)
+    ? agents.find((agent) => String(agent?.key || '').trim() === normalizedKey)
+    : null;
+  return String(matched?.name || '').trim();
+}
+
+export function pickChatAgentLabel(chat: ChatInfo, agents: Array<{ key?: string; name?: string }> = []): string {
   const firstAgentName = String(chat?.firstAgentName || '').trim();
   if (firstAgentName) {
     return firstAgentName;
   }
 
   const firstAgentKey = String(chat?.firstAgentKey || '').trim();
-  if (firstAgentKey) {
-    return firstAgentKey;
+  const fallbackAgentKey = String(chat?.agentKey || '').trim();
+  const candidateKey = firstAgentKey || fallbackAgentKey;
+  const mappedAgentName = findAgentNameByKey(agents, candidateKey);
+  if (mappedAgentName) {
+    return mappedAgentName;
+  }
+
+  if (candidateKey) {
+    return candidateKey;
   }
 
   return 'n/a';

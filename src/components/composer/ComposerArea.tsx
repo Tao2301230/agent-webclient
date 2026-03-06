@@ -4,14 +4,45 @@ import { MentionSuggest } from "./MentionSuggest";
 import { COMPOSER_MAX_LINES } from "../../context/constants";
 import { createRequestId, interruptChat, steerChat } from "../../lib/apiClient";
 import { parseLeadingMentionDraft } from "../../lib/mentionParser";
+import { resolveMentionCandidatesFromState } from "../../lib/mentionCandidates";
+import { MaterialIcon } from "../common/MaterialIcon";
+
+type SpeechRecognitionLike = {
+	lang: string;
+	continuous: boolean;
+	interimResults: boolean;
+	onstart: (() => void) | null;
+	onend: (() => void) | null;
+	onerror: ((event: { error?: string }) => void) | null;
+	onresult:
+		| ((event: {
+				resultIndex: number;
+				results: ArrayLike<{
+					isFinal: boolean;
+					0: { transcript: string };
+				}>;
+		  }) => void)
+		| null;
+	start: () => void;
+	stop: () => void;
+};
+
+type SpeechConstructor = new () => SpeechRecognitionLike;
 
 export const ComposerArea: React.FC = () => {
 	const state = useAppState();
 	const dispatch = useAppDispatch();
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const plusMenuRef = useRef<HTMLDivElement>(null);
+	const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
+	const speechBaseValueRef = useRef("");
+	const speechFinalBufferRef = useRef("");
+	const speechListeningRef = useRef(false);
 	const [inputValue, setInputValue] = useState("");
 	const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+	const [speechSupported, setSpeechSupported] = useState(false);
+	const [speechListening, setSpeechListening] = useState(false);
+	const [speechStatus, setSpeechStatus] = useState("点击开始听写");
 
 	const isFrontendActive = !!state.activeFrontendTool;
 
@@ -28,6 +59,22 @@ export const ComposerArea: React.FC = () => {
 	useEffect(() => {
 		autoresize();
 	}, [inputValue, autoresize]);
+
+	useEffect(() => {
+		const ctor =
+			(
+				window as Window & {
+					SpeechRecognition?: SpeechConstructor;
+					webkitSpeechRecognition?: SpeechConstructor;
+				}
+			).SpeechRecognition ||
+			(
+				window as Window & {
+					webkitSpeechRecognition?: SpeechConstructor;
+				}
+			).webkitSpeechRecognition;
+		setSpeechSupported(Boolean(ctor));
+	}, []);
 
 	useEffect(() => {
 		if (!plusMenuOpen) return;
@@ -68,7 +115,7 @@ export const ComposerArea: React.FC = () => {
 			}
 
 			const query = String(draft.token || "").toLowerCase();
-			const candidates = state.agents
+			const candidates = resolveMentionCandidatesFromState(state)
 				.filter((agent) => {
 					const key = String(agent.key || "").toLowerCase();
 					const name = String(agent.name || "").toLowerCase();
@@ -86,7 +133,7 @@ export const ComposerArea: React.FC = () => {
 			dispatch({ type: "SET_MENTION_ACTIVE_INDEX", index: 0 });
 			dispatch({ type: "SET_MENTION_OPEN", open: true });
 		},
-		[closeMention, dispatch, state.agents],
+		[closeMention, dispatch, state],
 	);
 
 	const selectMentionByIndex = useCallback(
@@ -117,6 +164,110 @@ export const ComposerArea: React.FC = () => {
 			new CustomEvent("agent:send-message", { detail: { message } }),
 		);
 	}, [inputValue, state.streaming]);
+
+	const mergeSpeechText = useCallback((base: string, append: string) => {
+		if (!append) return base;
+		return `${base}${append}`;
+	}, []);
+
+	const stopSpeechInput = useCallback(() => {
+		speechListeningRef.current = false;
+		setSpeechListening(false);
+		setSpeechStatus("点击开始听写");
+		const recognition = speechRecognitionRef.current;
+		if (!recognition) return;
+		try {
+			recognition.stop();
+		} catch {
+			/* no-op */
+		}
+	}, []);
+
+	const startSpeechInput = useCallback(() => {
+		const ctor =
+			(
+				window as Window & {
+					SpeechRecognition?: SpeechConstructor;
+					webkitSpeechRecognition?: SpeechConstructor;
+				}
+			).SpeechRecognition ||
+			(
+				window as Window & {
+					webkitSpeechRecognition?: SpeechConstructor;
+				}
+			).webkitSpeechRecognition;
+
+		if (!ctor) {
+			setSpeechStatus("当前浏览器不支持语音输入");
+			return;
+		}
+
+		if (!speechRecognitionRef.current) {
+			const recognition = new ctor();
+			recognition.lang = "zh-CN";
+			recognition.continuous = true;
+			recognition.interimResults = true;
+			recognition.onstart = () => {
+				speechListeningRef.current = true;
+				setSpeechListening(true);
+				setSpeechStatus("正在听写...");
+			};
+			recognition.onend = () => {
+				speechListeningRef.current = false;
+				setSpeechListening(false);
+				setSpeechStatus("点击开始听写");
+			};
+			recognition.onerror = (event) => {
+				const msg = String(event?.error || "识别失败");
+				speechListeningRef.current = false;
+				setSpeechListening(false);
+				setSpeechStatus(`语音识别错误: ${msg}`);
+			};
+			recognition.onresult = (event) => {
+				let finalDelta = "";
+				let interimDelta = "";
+				for (
+					let i = event.resultIndex;
+					i < event.results.length;
+					i += 1
+				) {
+					const chunk = event.results[i]?.[0]?.transcript || "";
+					if (!chunk) continue;
+					if (event.results[i].isFinal) {
+						finalDelta += chunk;
+					} else {
+						interimDelta += chunk;
+					}
+				}
+				if (finalDelta) {
+					speechFinalBufferRef.current += finalDelta;
+				}
+				const next = mergeSpeechText(
+					speechBaseValueRef.current,
+					`${speechFinalBufferRef.current}${interimDelta}`,
+				);
+				setInputValue(next);
+				updateMentionSuggestions(next);
+			};
+			speechRecognitionRef.current = recognition;
+		}
+
+		speechBaseValueRef.current = inputValue;
+		speechFinalBufferRef.current = "";
+		try {
+			speechRecognitionRef.current.start();
+		} catch {
+			setSpeechStatus("语音识别未启动，请重试");
+		}
+	}, [inputValue, mergeSpeechText, updateMentionSuggestions]);
+
+	const toggleSpeechInput = useCallback(() => {
+		if (speechListeningRef.current) {
+			stopSpeechInput();
+		} else {
+			startSpeechInput();
+		}
+	}, [startSpeechInput, stopSpeechInput]);
 
 	const handleKeyDown = useCallback(
 		(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -196,11 +347,21 @@ export const ComposerArea: React.FC = () => {
 		return String(state.pendingNewChatAgentKey || "").trim();
 	}, [state.chatId, state.chatAgentById, state.pendingNewChatAgentKey]);
 
+	const resolveCurrentTeamId = useCallback(() => {
+		if (String(state.chatId || "").trim()) return "";
+		const selected = state.workerIndexByKey.get(
+			String(state.workerSelectionKey || "").trim(),
+		);
+		if (!selected || selected.type !== "team") return "";
+		return String(selected.sourceId || "").trim();
+	}, [state.chatId, state.workerIndexByKey, state.workerSelectionKey]);
+
 	const handleInterrupt = useCallback(async () => {
 		const chatId = String(state.chatId || "").trim();
 		const runId = resolveCurrentRunId();
 		const requestId = createRequestId("req");
 		const agentKey = resolveCurrentAgentKey();
+		const teamId = resolveCurrentTeamId();
 		if (!chatId || !runId) {
 			dispatch({
 				type: "APPEND_DEBUG",
@@ -215,6 +376,7 @@ export const ComposerArea: React.FC = () => {
 				chatId,
 				runId,
 				agentKey: agentKey || undefined,
+				teamId: teamId || undefined,
 				message: "",
 				planningMode: Boolean(state.planningMode),
 			});
@@ -229,6 +391,11 @@ export const ComposerArea: React.FC = () => {
 			});
 		} finally {
 			state.abortController?.abort();
+			window.dispatchEvent(
+				new CustomEvent("agent:voice-stop-all", {
+					detail: { reason: "interrupt", mode: "stop" },
+				}),
+			);
 			dispatch({ type: "SET_STREAMING", streaming: false });
 			dispatch({ type: "SET_ABORT_CONTROLLER", controller: null });
 		}
@@ -236,6 +403,7 @@ export const ComposerArea: React.FC = () => {
 		dispatch,
 		resolveCurrentRunId,
 		resolveCurrentAgentKey,
+		resolveCurrentTeamId,
 		state.chatId,
 		state.abortController,
 		state.planningMode,
@@ -249,6 +417,7 @@ export const ComposerArea: React.FC = () => {
 		const runId = resolveCurrentRunId();
 		const requestId = createRequestId("req");
 		const agentKey = resolveCurrentAgentKey();
+		const teamId = resolveCurrentTeamId();
 		if (!chatId || !runId) {
 			dispatch({
 				type: "APPEND_DEBUG",
@@ -263,6 +432,7 @@ export const ComposerArea: React.FC = () => {
 				chatId,
 				runId,
 				agentKey: agentKey || undefined,
+				teamId: teamId || undefined,
 				message,
 				planningMode: Boolean(state.planningMode),
 			});
@@ -283,6 +453,7 @@ export const ComposerArea: React.FC = () => {
 		state.chatId,
 		resolveCurrentRunId,
 		resolveCurrentAgentKey,
+		resolveCurrentTeamId,
 		dispatch,
 		state.planningMode,
 	]);
@@ -305,6 +476,18 @@ export const ComposerArea: React.FC = () => {
 		return () =>
 			window.removeEventListener("agent:select-mention", onSelectMention);
 	}, [closeMention]);
+
+	useEffect(() => {
+		return () => {
+			const recognition = speechRecognitionRef.current;
+			if (!recognition) return;
+			try {
+				recognition.stop();
+			} catch {
+				/* no-op */
+			}
+		};
+	}, []);
 
 	return (
 		<div
@@ -368,9 +551,10 @@ export const ComposerArea: React.FC = () => {
 							type="button"
 							className="composer-plus-btn"
 							aria-expanded={plusMenuOpen}
+							aria-label="更多选项"
 							onClick={() => setPlusMenuOpen((open) => !open)}
 						>
-							+
+							<MaterialIcon name="add" />
 						</button>
 						{plusMenuOpen && (
 							<div className="composer-plus-popover">
@@ -394,27 +578,45 @@ export const ComposerArea: React.FC = () => {
 							</div>
 						)}
 					</div>
-					{state.streaming ? (
+					<div className="composer-actions">
 						<button
-							className="interrupt-btn"
-							id="interrupt-btn"
-							disabled={isFrontendActive}
-							onClick={handleInterrupt}
+							type="button"
+							className={`voice-btn ${speechListening ? "is-listening" : ""}`}
+							disabled={!speechSupported || isFrontendActive}
+							onClick={toggleSpeechInput}
+							title={speechStatus}
+							aria-label={speechStatus}
 						>
-							中断
+							<MaterialIcon
+								name={speechListening ? "mic" : "mic_none"}
+							/>
 						</button>
-					) : (
-						<button
-							className="send-btn"
-							id="send-btn"
-							disabled={isFrontendActive}
-							onClick={handleSend}
-						>
-							↑
-						</button>
-					)}
+						{state.streaming ? (
+							<button
+								className="interrupt-btn"
+								id="interrupt-btn"
+								disabled={isFrontendActive}
+								onClick={handleInterrupt}
+							>
+								中断
+							</button>
+						) : (
+							<button
+								className="send-btn"
+								id="send-btn"
+								disabled={isFrontendActive}
+								onClick={handleSend}
+								aria-label="发送"
+							>
+								<MaterialIcon name="arrow_upward" />
+							</button>
+						)}
+					</div>
 				</div>
 			</div>
+			{speechSupported && !isFrontendActive && (
+				<div className="voice-hint">{speechStatus}</div>
+			)}
 		</div>
 	);
 };

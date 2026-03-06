@@ -73,7 +73,8 @@ module.exports = (env, argv) => {
       proxy: [
         {
           context: ['/api/ap'],
-          target: 'http://47.100.131.144:9903/',
+          // target: 'http://47.100.131.144:9903/',
+          target: 'https://agent-webclient.zenmind.cc/',
           changeOrigin: true,
           onProxyRes: function (proxyRes, req, res) {
             const header = proxyRes.headers['content-disposition'];
@@ -82,8 +83,7 @@ module.exports = (env, argv) => {
             const accept = String(req.headers.accept || '');
             const reqUrl = String(req.url || '');
             const isSseRequest = accept.includes('text/event-stream')
-              || reqUrl.startsWith('/api/ap/query')
-              || reqUrl.startsWith('/api/ap/steer');
+              || reqUrl.startsWith('/api/ap/query');
             if (isSseRequest) {
               res.writeHead(res.statusCode, {
                 'Content-Type': 'text/event-stream',

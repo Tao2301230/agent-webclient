@@ -64,6 +64,17 @@ export interface EmbeddedViewport {
   ts?: number;
 }
 
+export interface TtsVoiceBlock {
+  signature: string;
+  text: string;
+  closed: boolean;
+  expanded: boolean;
+  status: 'ready' | 'connecting' | 'playing' | 'done' | 'error' | 'stopped';
+  error: string;
+  sampleRate?: number;
+  channels?: number;
+}
+
 export interface TimelineNode {
   id: string;
   kind: TimelineNodeKind;
@@ -83,6 +94,7 @@ export interface TimelineNode {
   contentId?: string;
   segments?: ContentSegment[];
   embeddedViewports?: Record<string, EmbeddedViewport>;
+  ttsVoiceBlocks?: Record<string, TtsVoiceBlock>;
 }
 
 /* ============================================
@@ -191,7 +203,46 @@ export interface Chat {
 export interface Agent {
   key: string;
   name: string;
+  role?: string;
   [key: string]: unknown;
+}
+
+export interface Team {
+  teamId: string;
+  name?: string;
+  role?: string;
+  agentKey?: string;
+  agentKeys?: string[];
+  agents?: Array<string | { key?: string; agentKey?: string }>;
+  members?: Array<string | { key?: string; agentKey?: string }>;
+  [key: string]: unknown;
+}
+
+export type ConversationMode = 'chat' | 'worker';
+
+export interface WorkerRow {
+  key: string;
+  type: 'agent' | 'team';
+  sourceId: string;
+  displayName: string;
+  role: string;
+  teamAgentLabels: string[];
+  latestChatId: string;
+  latestRunId: string;
+  latestUpdatedAt: number;
+  latestChatName: string;
+  latestRunContent: string;
+  hasHistory: boolean;
+  latestRunSortValue: number;
+  searchText: string;
+}
+
+export interface WorkerConversationRow {
+  chatId: string;
+  chatName: string;
+  updatedAt: number;
+  lastRunId: string;
+  lastRunContent: string;
 }
 
 /* ============================================
@@ -209,6 +260,7 @@ export interface RenderQueue {
    ============================================ */
 export interface AppState {
   agents: Agent[];
+  teams: Team[];
   chats: Chat[];
   chatAgentById: Map<string, string>;
   pendingNewChatAgentKey: string;
@@ -241,11 +293,18 @@ export interface AppState {
   renderQueue: RenderQueue;
   activeReasoningKey: string;
   chatFilter: string;
+  conversationMode: ConversationMode;
+  workerSelectionKey: string;
+  workerRows: WorkerRow[];
+  workerIndexByKey: Map<string, WorkerRow>;
+  workerRelatedChats: WorkerConversationRow[];
+  workerChatPanelCollapsed: boolean;
   chatLoadSeq: number;
   settingsOpen: boolean;
   activeDebugTab: DebugTab;
   leftDrawerOpen: boolean;
   rightDrawerOpen: boolean;
+  desktopDebugSidebarEnabled: boolean;
   layoutMode: LayoutMode;
   planExpanded: boolean;
   planManualOverride: boolean | null;

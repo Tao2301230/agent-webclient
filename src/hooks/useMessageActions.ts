@@ -8,6 +8,7 @@ import {
 } from '../lib/apiClient';
 import { consumeJsonSseStream } from '../lib/sseParser';
 import { parseLeadingAgentMention } from '../lib/mentionParser';
+import { resolveMentionCandidatesFromState } from '../lib/mentionCandidates';
 import type { AgentEvent } from '../context/types';
 
 /**
@@ -31,7 +32,17 @@ export function useMessageActions() {
       if (stateRef.current.streaming) return;
 
       /* Parse @mention */
-      const mention = parseLeadingAgentMention(rawMessage, stateRef.current.agents);
+      const mentionAgents = resolveMentionCandidatesFromState(stateRef.current);
+      const mentionEnabled = Array.isArray(mentionAgents) && mentionAgents.length > 0;
+      const mention = mentionEnabled
+        ? parseLeadingAgentMention(rawMessage, mentionAgents)
+        : {
+          cleanMessage: rawMessage.trim(),
+          mentionAgentKey: '',
+          mentionToken: '',
+          error: '',
+          hasMention: false,
+        };
       if (mention.error) {
         dispatch({
           type: 'APPEND_DEBUG',
@@ -44,7 +55,31 @@ export function useMessageActions() {
       const rememberedChatAgentKey = chatId
         ? String(stateRef.current.chatAgentById.get(chatId) || '').trim()
         : '';
-      const selectedAgentKey = mention.mentionAgentKey || rememberedChatAgentKey || stateRef.current.pendingNewChatAgentKey || '';
+      const selectedWorker = stateRef.current.workerIndexByKey.get(String(stateRef.current.workerSelectionKey || '').trim()) || null;
+      let selectedAgentKey = rememberedChatAgentKey || '';
+      let selectedTeamId = '';
+
+      if (!chatId && selectedWorker) {
+        if (selectedWorker.type === 'agent') {
+          selectedAgentKey = String(selectedWorker.sourceId || '').trim();
+        } else if (selectedWorker.type === 'team') {
+          selectedAgentKey = '';
+          selectedTeamId = String(selectedWorker.sourceId || '').trim();
+        }
+      }
+
+      if (mention.mentionAgentKey) {
+        selectedAgentKey = mention.mentionAgentKey;
+        const keepSelectedTeamScope = !chatId && selectedWorker?.type === 'team';
+        if (!keepSelectedTeamScope) {
+          selectedTeamId = '';
+        }
+      }
+
+      if (!selectedAgentKey) {
+        selectedAgentKey = stateRef.current.pendingNewChatAgentKey || '';
+      }
+
       const cleanMessage = mention.cleanMessage || rawMessage;
 
       if (!cleanMessage.trim()) return;
@@ -91,6 +126,7 @@ export function useMessageActions() {
           requestId,
           message: cleanMessage,
           agentKey: selectedAgentKey || undefined,
+          teamId: selectedTeamId || undefined,
           chatId: chatId || undefined,
           runId: stateRef.current.runId || undefined,
           planningMode: Boolean(stateRef.current.planningMode),

@@ -111,6 +111,10 @@ export function getAgents(): Promise<ApiResponse> {
   return requestJson('/api/ap/agents');
 }
 
+export function getTeams(): Promise<ApiResponse> {
+  return requestJson('/api/ap/teams');
+}
+
 export function getAgent(agentKey: string): Promise<ApiResponse> {
   const query = toQueryString({ agentKey });
   return requestJson(query ? `/api/ap/agent?${query}` : '/api/ap/agent');
@@ -166,6 +170,7 @@ export interface QueryLikeParams {
   chatId?: string;
   runId?: string;
   agentKey?: string;
+  teamId?: string;
   message: string;
   planningMode?: boolean;
 }
@@ -178,6 +183,7 @@ export function interruptChat(params: QueryLikeParams): Promise<ApiResponse> {
       chatId: params.chatId,
       runId: params.runId,
       agentKey: params.agentKey,
+      teamId: params.teamId,
       message: params.message,
       planningMode: params.planningMode ?? false,
     }),
@@ -192,6 +198,7 @@ export function steerChat(params: QueryLikeParams): Promise<ApiResponse> {
       chatId: params.chatId,
       runId: params.runId,
       agentKey: params.agentKey,
+      teamId: params.teamId,
       message: params.message,
       planningMode: params.planningMode ?? false,
     }),
@@ -203,6 +210,7 @@ export interface QueryStreamParams {
   message: string;
   planningMode?: boolean;
   agentKey?: string;
+  teamId?: string;
   chatId?: string;
   runId?: string;
   role?: string;
@@ -225,6 +233,7 @@ export function createQueryStream(options: QueryStreamParams): Promise<Response>
       planningMode: options.planningMode ?? false,
       message: options.message,
       agentKey: options.agentKey,
+      teamId: options.teamId,
       chatId: options.chatId,
       runId: options.runId,
       role: options.role,

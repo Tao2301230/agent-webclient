@@ -3,6 +3,7 @@ import { useAppState, useAppDispatch } from "../../context/AppContext";
 import type { AgentEvent, ToolState } from "../../context/types";
 import type { DebugTab } from "../../context/constants";
 import { DEBUG_TABS } from "../../context/constants";
+import { MaterialIcon } from "../common/MaterialIcon";
 
 function safeStr(v: unknown): string {
 	if (typeof v === "string") return v;
@@ -89,18 +90,27 @@ export const RightSidebar: React.FC = () => {
 
 	return (
 		<aside
-			className={`sidebar right-sidebar ${state.rightDrawerOpen || state.layoutMode === "desktop-fixed" ? "is-open" : ""}`}
+			className={`sidebar right-sidebar ${
+				state.layoutMode === "desktop-fixed"
+					? state.desktopDebugSidebarEnabled
+						? "is-open"
+						: ""
+					: state.rightDrawerOpen
+						? "is-open"
+						: ""
+			}`}
 			id="right-sidebar"
 		>
 			<div className="sidebar-head">
 				<h2>调试面板</h2>
 				<button
 					className="drawer-close"
+					aria-label="关闭调试面板"
 					onClick={() =>
 						dispatch({ type: "SET_RIGHT_DRAWER_OPEN", open: false })
 					}
 				>
-					✕
+					<MaterialIcon name="close" />
 				</button>
 			</div>
 

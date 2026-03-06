@@ -2,12 +2,15 @@ import React, { useState } from "react";
 import { useAppState, useAppDispatch } from "../../context/AppContext";
 import { ACCESS_TOKEN_STORAGE_KEY } from "../../context/constants";
 import { setAccessToken } from "../../lib/apiClient";
+import { getVoiceRuntime } from "../../lib/voiceRuntime";
 
 export const SettingsModal: React.FC = () => {
 	const state = useAppState();
 	const dispatch = useAppDispatch();
 	const [tokenInput, setTokenInput] = useState(state.accessToken);
 	const [error, setError] = useState("");
+	const [ttsDebugText, setTtsDebugText] = useState("");
+	const [ttsDebugStatus, setTtsDebugStatus] = useState("idle");
 
 	const handleSave = () => {
 		const token = tokenInput.trim();
@@ -16,6 +19,30 @@ export const SettingsModal: React.FC = () => {
 		dispatch({ type: "SET_ACCESS_TOKEN", token });
 		setError("");
 		dispatch({ type: "SET_SETTINGS_OPEN", open: false });
+	};
+
+	const handleTtsDebugSend = async () => {
+		const text = ttsDebugText.trim();
+		if (!text) {
+			setTtsDebugStatus("error: empty text");
+			return;
+		}
+		try {
+			setTtsDebugStatus("sending...");
+			await getVoiceRuntime()?.debugSpeakTtsVoice(text);
+			setTtsDebugStatus(`sent (${text.length} chars)`);
+		} catch (err) {
+			setTtsDebugStatus(`error: ${(err as Error).message}`);
+		}
+	};
+
+	const handleTtsDebugStop = () => {
+		window.dispatchEvent(
+			new CustomEvent("agent:voice-stop-all", {
+				detail: { reason: "debug_stop", mode: "stop" },
+			}),
+		);
+		setTtsDebugStatus("stopped");
 	};
 
 	const handleThemeToggle = () => {
@@ -72,6 +99,15 @@ export const SettingsModal: React.FC = () => {
 					>
 						刷新智能体
 					</button>
+					<button
+						onClick={() =>
+							window.dispatchEvent(
+								new CustomEvent("agent:refresh-teams"),
+							)
+						}
+					>
+						刷新 Teams
+					</button>
 					<button onClick={handleThemeToggle}>切换主题</button>
 					<button
 						onClick={() => {
@@ -81,6 +117,22 @@ export const SettingsModal: React.FC = () => {
 					>
 						清空日志
 					</button>
+				</div>
+
+				<div className="field-group" style={{ marginTop: "14px" }}>
+					<label htmlFor="tts-debug-input">TTS Voice 调试</label>
+					<textarea
+						id="tts-debug-input"
+						rows={3}
+						placeholder="输入调试文本，发送并播放..."
+						value={ttsDebugText}
+						onChange={(e) => setTtsDebugText(e.target.value)}
+					/>
+					<div className="settings-inline-actions">
+						<button onClick={handleTtsDebugSend}>发送并播放</button>
+						<button onClick={handleTtsDebugStop}>停止播放</button>
+					</div>
+					<p className="settings-hint">{ttsDebugStatus}</p>
 				</div>
 			</div>
 		</div>

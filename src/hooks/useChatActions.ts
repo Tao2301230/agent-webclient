@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { getAgents, getChats, getChat, setAccessToken } from '../lib/apiClient';
-import type { Chat, Agent, AgentEvent, TimelineNode, Plan, PlanRuntime, ToolState } from '../context/types';
+import { getAgents, getTeams, getChats, getChat, setAccessToken } from '../lib/apiClient';
+import type { Chat, Agent, AgentEvent, TimelineNode, Plan, PlanRuntime, ToolState, Team, WorkerRow } from '../context/types';
 import { parseContentSegments } from '../lib/contentSegments';
 import { parseFrontendToolParams } from '../lib/frontendToolParams';
+import { buildWorkerRows, createWorkerKeyFromChat } from '../lib/workerListFormatter';
+import { buildWorkerConversationRows } from '../lib/workerConversationFormatter';
 
 /**
  * Safely extract a string value from an event field.
@@ -367,25 +369,90 @@ export function useChatActions() {
   const loadSeqRef = useRef(0);
   const bootstrappedRef = useRef(false);
 
+  const findDefaultTeamWorkerKey = useCallback((rows: WorkerRow[]): string => {
+    const matched = rows.find((row) => {
+      if (row.type !== 'team') return false;
+      const name = String(row.displayName || '').trim().toLowerCase();
+      const sourceId = String(row.sourceId || '').trim().toLowerCase();
+      return name === 'default team'
+        || name === 'default_team'
+        || name === '默认小组'
+        || sourceId === 'default_team'
+        || sourceId === 'default';
+    });
+    return matched?.key || '';
+  }, []);
+
+  const ensureWorkerSelection = useCallback((rows: WorkerRow[], preferredWorkerKey = ''): string => {
+    const preferred = String(preferredWorkerKey || '').trim();
+    if (preferred && rows.some((row) => row.key === preferred)) {
+      return preferred;
+    }
+    const current = String(stateRef.current.workerSelectionKey || '').trim();
+    if (current && rows.some((row) => row.key === current)) {
+      return current;
+    }
+    const defaultTeamKey = findDefaultTeamWorkerKey(rows);
+    if (defaultTeamKey) return defaultTeamKey;
+    return rows[0]?.key || '';
+  }, [findDefaultTeamWorkerKey, stateRef]);
+
+  const rebuildWorkerRowsFromState = useCallback((overrides: Partial<{ agents: Agent[]; teams: Team[]; chats: Chat[]; workerSelectionKey: string }> = {}) => {
+    const current = stateRef.current;
+    const agents = overrides.agents ?? current.agents;
+    const teams = overrides.teams ?? current.teams;
+    const chats = overrides.chats ?? current.chats;
+    const rows = buildWorkerRows({
+      agents,
+      teams,
+      chats,
+    });
+    const workerSelectionKey = ensureWorkerSelection(rows, overrides.workerSelectionKey ?? current.workerSelectionKey);
+    if (workerSelectionKey) {
+      dispatch({ type: 'SET_WORKER_SELECTION_KEY', workerKey: workerSelectionKey });
+    }
+    dispatch({ type: 'SET_WORKER_ROWS', rows });
+
+    const selectedWorker = rows.find((row) => row.key === workerSelectionKey) || null;
+    const workerChats = buildWorkerConversationRows({
+      chats,
+      worker: selectedWorker,
+    });
+    dispatch({ type: 'SET_WORKER_RELATED_CHATS', chats: workerChats });
+  }, [dispatch, ensureWorkerSelection, stateRef]);
+
   const loadAgents = useCallback(async () => {
     try {
       const response = await getAgents();
       const agents = (response.data as Agent[]) || [];
       dispatch({ type: 'SET_AGENTS', agents });
+      rebuildWorkerRowsFromState({ agents });
     } catch (error) {
       dispatch({ type: 'APPEND_DEBUG', line: `[loadAgents error] ${(error as Error).message}` });
     }
-  }, [dispatch]);
+  }, [dispatch, rebuildWorkerRowsFromState]);
+
+  const loadTeams = useCallback(async () => {
+    try {
+      const response = await getTeams();
+      const teams = (response.data as Team[]) || [];
+      dispatch({ type: 'SET_TEAMS', teams });
+      rebuildWorkerRowsFromState({ teams });
+    } catch (error) {
+      dispatch({ type: 'APPEND_DEBUG', line: `[loadTeams error] ${(error as Error).message}` });
+    }
+  }, [dispatch, rebuildWorkerRowsFromState]);
 
   const loadChats = useCallback(async () => {
     try {
       const response = await getChats();
       const chats = (response.data as Chat[]) || [];
       dispatch({ type: 'SET_CHATS', chats });
+      rebuildWorkerRowsFromState({ chats });
     } catch (error) {
       dispatch({ type: 'APPEND_DEBUG', line: `[loadChats error] ${(error as Error).message}` });
     }
-  }, [dispatch]);
+  }, [dispatch, rebuildWorkerRowsFromState]);
 
   const loadChat = useCallback(
     async (chatId: string) => {
@@ -394,6 +461,19 @@ export function useChatActions() {
       const seq = ++loadSeqRef.current;
       dispatch({ type: 'SET_CHAT_ID', chatId });
       dispatch({ type: 'RESET_CONVERSATION' });
+      window.dispatchEvent(new CustomEvent('agent:voice-reset'));
+
+      const currentChat = stateRef.current.chats.find((chat) => String(chat?.chatId || '') === String(chatId));
+      const workerKey = createWorkerKeyFromChat((currentChat || {}) as Chat);
+      if (workerKey) {
+        dispatch({ type: 'SET_WORKER_SELECTION_KEY', workerKey });
+        const worker = stateRef.current.workerIndexByKey.get(workerKey) as WorkerRow | undefined;
+        const workerChats = buildWorkerConversationRows({
+          chats: stateRef.current.chats,
+          worker: worker || null,
+        });
+        dispatch({ type: 'SET_WORKER_RELATED_CHATS', chats: workerChats });
+      }
 
       try {
         const response = await getChat(chatId, false);
@@ -451,6 +531,38 @@ export function useChatActions() {
     [dispatch]
   );
 
+  const selectWorkerConversation = useCallback(async (workerKey: string) => {
+    const normalized = String(workerKey || '').trim();
+    if (!normalized) return;
+
+    const row = stateRef.current.workerIndexByKey.get(normalized) as WorkerRow | undefined;
+    if (!row) return;
+
+    dispatch({ type: 'SET_WORKER_SELECTION_KEY', workerKey: normalized });
+    const workerChats = buildWorkerConversationRows({
+      chats: stateRef.current.chats,
+      worker: row,
+    });
+    dispatch({ type: 'SET_WORKER_RELATED_CHATS', chats: workerChats });
+    dispatch({
+      type: 'SET_WORKER_CHAT_PANEL_COLLAPSED',
+      collapsed: true,
+    });
+
+    if (row.hasHistory && row.latestChatId) {
+      await loadChat(row.latestChatId);
+      return;
+    }
+
+    dispatch({ type: 'SET_CHAT_ID', chatId: '' });
+    dispatch({ type: 'RESET_CONVERSATION' });
+    window.dispatchEvent(new CustomEvent('agent:voice-reset'));
+    dispatch({
+      type: 'APPEND_DEBUG',
+      line: `[worker] ${row.type === 'team' ? '小组' : '员工'} ${row.displayName} 暂无历史会话，发送首条消息将创建新会话`,
+    });
+  }, [dispatch, loadChat, stateRef]);
+
   /* Bootstrap: load agents and chats on mount */
   useEffect(() => {
     if (bootstrappedRef.current) {
@@ -460,6 +572,7 @@ export function useChatActions() {
 
     setAccessToken(stateRef.current.accessToken);
     loadAgents();
+    loadTeams();
     loadChats();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -483,6 +596,15 @@ export function useChatActions() {
     return () => window.removeEventListener('agent:refresh-agents', handler);
   }, [loadAgents]);
 
+  /* Refresh teams list on-demand */
+  useEffect(() => {
+    const handler = () => {
+      loadTeams().catch(() => undefined);
+    };
+    window.addEventListener('agent:refresh-teams', handler);
+    return () => window.removeEventListener('agent:refresh-teams', handler);
+  }, [loadTeams]);
+
   /* Refresh chats list on-demand */
   useEffect(() => {
     const handler = () => {
@@ -492,5 +614,33 @@ export function useChatActions() {
     return () => window.removeEventListener('agent:refresh-chats', handler);
   }, [loadChats]);
 
-  return { loadAgents, loadChats, loadChat };
+  /* Switch conversation mode */
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const mode = (e as CustomEvent).detail?.mode === 'worker' ? 'worker' : 'chat';
+      dispatch({ type: 'SET_CONVERSATION_MODE', mode });
+      if (mode === 'worker') {
+        rebuildWorkerRowsFromState();
+        dispatch({ type: 'SET_WORKER_CHAT_PANEL_COLLAPSED', collapsed: true });
+      } else {
+        dispatch({ type: 'SET_WORKER_CHAT_PANEL_COLLAPSED', collapsed: true });
+      }
+    };
+    window.addEventListener('agent:set-conversation-mode', handler);
+    return () => window.removeEventListener('agent:set-conversation-mode', handler);
+  }, [dispatch, rebuildWorkerRowsFromState]);
+
+  /* Select worker/team row */
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const workerKey = (e as CustomEvent).detail?.workerKey;
+      if (workerKey) {
+        selectWorkerConversation(workerKey).catch(() => undefined);
+      }
+    };
+    window.addEventListener('agent:select-worker', handler);
+    return () => window.removeEventListener('agent:select-worker', handler);
+  }, [selectWorkerConversation]);
+
+  return { loadAgents, loadTeams, loadChats, loadChat, selectWorkerConversation };
 }

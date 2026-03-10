@@ -10,7 +10,7 @@ describe('resolveToolLabel', () => {
     })).toBe('确认对话框');
   });
 
-  it('falls back through toolName, toolId, toolKey, then default text', () => {
+  it('falls back through toolName, toolId, then default text', () => {
     expect(resolveToolLabel({
       toolName: 'confirm_dialog',
       toolId: 'tool-123',
@@ -24,7 +24,7 @@ describe('resolveToolLabel', () => {
 
     expect(resolveToolLabel({
       toolKey: 'confirm_dialog',
-    })).toBe('confirm_dialog');
+    })).toBe('tool');
 
     expect(resolveToolLabel({})).toBe('tool');
   });

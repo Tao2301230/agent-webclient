@@ -320,7 +320,7 @@ function replayEvent(rs: ReplayState, event: AgentEvent): void {
     rs.timelineNodes.set(nodeId, {
       id: nodeId, kind: 'tool', toolId,
       toolLabel: event.toolLabel || existing?.toolLabel || '',
-      toolName: event.toolName || existing?.toolName || toolId,
+      toolName: event.toolName || existing?.toolName || '',
       toolApi: event.toolApi || existing?.toolApi || '',
       description: event.description || existing?.description || '',
       argsText,

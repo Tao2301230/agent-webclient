@@ -638,6 +638,17 @@ textarea {
   gap: 10px;
 }
 
+.timeline-lane::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  transform: translateX(-0.5px);
+  background: color-mix(in srgb, var(--line-soft) 80%, transparent);
+}
+
 .timeline-row {
   position: relative;
   animation: node-rise 0.28s ease both;
@@ -685,14 +696,7 @@ textarea {
 }
 
 .timeline-marker::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: -12px;
-  bottom: -12px;
-  width: 1px;
-  transform: translateX(-0.5px);
-  background: color-mix(in srgb, var(--line-soft) 80%, transparent);
+  content: none;
 }
 
 /* Timeline icons */
@@ -743,6 +747,26 @@ textarea {
 }
 
 .timeline-row-time {
+  font-size: 10px;
+  line-height: 1;
+  color: var(--ink-muted);
+  letter-spacing: 0.02em;
+}
+
+.timeline-run-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.timeline-run-items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.timeline-run-time {
+  margin-left: 24px;
   font-size: 10px;
   line-height: 1;
   color: var(--ink-muted);
@@ -1832,21 +1856,8 @@ textarea {
   box-shadow: none;
 }
 
-.debug-log {
-  margin: 0;
-  min-height: 0;
-  flex: 1;
-  border: 1px solid color-mix(in srgb, var(--line-soft) 80%, transparent);
-  border-radius: 10px;
-  padding: 10px;
-  background: color-mix(in srgb, #07152b 94%, #0f2a4f);
-  color: #d3e7ff;
-  font-size: 11px;
-  font-family: 'IBM Plex Mono', monospace;
-  line-height: 1.35;
-  white-space: pre-wrap;
-  word-break: break-all;
-  overflow: auto;
+.debug-log-list {
+  background: color-mix(in srgb, #08162f 92%, var(--bg-elev-2));
 }
 
 .mono {
@@ -1913,50 +1924,71 @@ textarea {
   word-break: break-word;
 }
 
-.event-kind-error .event-row-head strong {
-  color: var(--accent-danger);
-  text-shadow: 0 0 0.2px currentColor;
+.event-group-chat .event-row-head strong {
+  color: #8d5cf6;
 }
 
-.event-kind-run .event-row-head strong {
+.event-group-run .event-row-head strong {
   color: var(--accent-electric-strong);
 }
 
-.event-kind-tool .event-row-head strong {
-  color: var(--accent-electric);
-}
-
-.event-kind-content .event-row-head strong {
+.event-group-content .event-row-head strong {
   color: var(--accent-lime);
 }
 
-.event-kind-plan .event-row-head strong {
+.event-group-reasoning .event-row-head strong {
+  color: #c48318;
+}
+
+.event-group-tool .event-row-head strong {
+  color: #1696b7;
+}
+
+.event-group-action .event-row-head strong {
+  color: #d04a7f;
+}
+
+.event-group-plan .event-row-head strong {
   color: var(--accent-warn);
 }
 
-.event-kind-error {
-  border-left-color: color-mix(in srgb, var(--accent-danger) 78%, transparent);
-  background: color-mix(in srgb, var(--accent-danger) 8%, var(--bg-elev-2));
+.event-group-chat {
+  border-left-color: color-mix(in srgb, #8d5cf6 80%, transparent);
+  background: color-mix(in srgb, #8d5cf6 8%, var(--bg-elev-2));
 }
 
-.event-kind-run {
+.event-group-run {
   border-left-color: color-mix(in srgb, var(--accent-electric-strong) 82%, transparent);
   background: color-mix(in srgb, var(--accent-electric) 8%, var(--bg-elev-2));
 }
 
-.event-kind-tool {
-  border-left-color: color-mix(in srgb, var(--accent-electric) 72%, transparent);
-  background: color-mix(in srgb, var(--accent-electric) 6%, var(--bg-elev-2));
-}
-
-.event-kind-content {
+.event-group-content {
   border-left-color: color-mix(in srgb, var(--accent-lime) 78%, transparent);
   background: color-mix(in srgb, var(--accent-lime) 7%, var(--bg-elev-2));
 }
 
-.event-kind-plan {
+.event-group-reasoning {
+  border-left-color: color-mix(in srgb, #c48318 82%, transparent);
+  background: color-mix(in srgb, #c48318 8%, var(--bg-elev-2));
+}
+
+.event-group-tool {
+  border-left-color: color-mix(in srgb, #1696b7 78%, transparent);
+  background: color-mix(in srgb, #1696b7 7%, var(--bg-elev-2));
+}
+
+.event-group-action {
+  border-left-color: color-mix(in srgb, #d04a7f 78%, transparent);
+  background: color-mix(in srgb, #d04a7f 8%, var(--bg-elev-2));
+}
+
+.event-group-plan {
   border-left-color: color-mix(in srgb, var(--accent-warn) 78%, transparent);
   background: color-mix(in srgb, var(--accent-warn) 8%, var(--bg-elev-2));
+}
+
+.event-row.is-error-type {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-danger) 38%, transparent);
 }
 
 /* Event Popover */
@@ -2061,6 +2093,23 @@ textarea {
   white-space: pre-wrap;
   word-break: break-all;
   padding: 8px;
+}
+
+.debug-log-card {
+  background: color-mix(in srgb, #0b1b38 94%, var(--bg-elev-2));
+  border-color: color-mix(in srgb, #2d5ea3 34%, var(--line-soft));
+}
+
+.debug-log-card .debug-event-head strong {
+  color: #b8d4ff;
+}
+
+.debug-log-card .debug-event-json {
+  background: color-mix(in srgb, #071427 96%, #10294e);
+  border-color: color-mix(in srgb, #275184 42%, transparent);
+  color: #d5e7ff;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* ========================================
@@ -2474,12 +2523,12 @@ textarea {
 
 .worker-role {
   flex: 0 0 auto;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--ink-2);
-  border: 1px solid color-mix(in srgb, var(--line-soft) 84%, transparent);
-  border-radius: 999px;
-  padding: 2px 8px;
-  background: color-mix(in srgb, var(--bg-elev-2) 88%, var(--bg-input));
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
 }
 
 .worker-chat-sidebar {
@@ -2582,7 +2631,7 @@ textarea {
 
 .worker-chat-float-btn {
   position: fixed;
-  right: 30px;
+  right: 0;
   top: 86px;
   transform: none;
   z-index: 27;
@@ -2614,7 +2663,7 @@ textarea {
 }
 
 .layout-desktop-fixed.desktop-debug-disabled .worker-chat-float-btn {
-  right: 20px;
+  right: 0;
 }
 
 @media (max-width: 1279px) {
@@ -2644,7 +2693,7 @@ textarea {
   }
 
   .worker-chat-float-btn {
-    right: 4px;
+    right: 0;
     top: 78px;
     bottom: auto;
     padding: 7px 5px !important;

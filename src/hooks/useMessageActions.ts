@@ -122,6 +122,7 @@ export function useMessageActions() {
       dispatch({ type: 'SET_REQUEST_ID', requestId });
       dispatch({ type: 'SET_STREAMING', streaming: true });
       dispatch({ type: 'SET_ABORT_CONTROLLER', controller: abortController });
+      dispatch({ type: 'CLEAR_RAW_SSE_ENTRIES' });
 
       try {
         const response = await createQueryStream({
@@ -150,6 +151,16 @@ export function useMessageActions() {
 
         await consumeJsonSseStream(response, {
           signal: abortController.signal,
+          onFrame: (frame) => {
+            dispatch({
+              type: 'APPEND_RAW_SSE_ENTRY',
+              entry: {
+                receivedAt: frame.receivedAt,
+                rawFrame: frame.rawFrame,
+                parsedEventName: frame.event,
+              },
+            });
+          },
           onJson: (json) => {
             handleEvent(json as AgentEvent);
           },

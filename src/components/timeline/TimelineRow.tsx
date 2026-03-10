@@ -9,6 +9,7 @@ import { MaterialIcon } from "../common/MaterialIcon";
 
 interface TimelineRowProps {
 	node: TimelineNode;
+	showTime?: boolean;
 }
 
 const timeFormatter = new Intl.DateTimeFormat("zh-CN", {
@@ -45,7 +46,7 @@ function isYesterday(target: Date, now: Date): boolean {
 	);
 }
 
-function formatRowTime(ts?: number): { short: string; full: string } {
+export function formatTimelineTime(ts?: number): { short: string; full: string } {
 	if (!ts) return { short: "", full: "" };
 	const target = new Date(ts);
 	if (Number.isNaN(target.getTime())) return { short: "", full: "" };
@@ -110,9 +111,12 @@ const NodeIcon: React.FC<{ kind: string; role?: string }> = ({
 	);
 };
 
-export const TimelineRow: React.FC<TimelineRowProps> = ({ node }) => {
-	const time = formatRowTime(node.ts);
-	const timeNode = time.short ? (
+export const TimelineRow: React.FC<TimelineRowProps> = ({
+	node,
+	showTime = false,
+}) => {
+	const time = formatTimelineTime(node.ts);
+	const timeNode = showTime && time.short ? (
 		<div className="timeline-row-time" title={time.full}>
 			{time.short}
 		</div>

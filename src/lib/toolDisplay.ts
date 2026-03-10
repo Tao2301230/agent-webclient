@@ -10,7 +10,6 @@ export function resolveToolLabel(source: ToolDisplaySource, fallback = 'tool'): 
     source.toolLabel,
     source.toolName,
     source.toolId,
-    source.toolKey,
   ];
 
   for (const candidate of candidates) {

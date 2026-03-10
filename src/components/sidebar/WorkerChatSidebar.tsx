@@ -83,7 +83,7 @@ export const WorkerChatSidebar: React.FC = () => {
 					className="worker-chat-float-btn"
 					variant="secondary"
 					size="sm"
-					aria-label="展开当前员工对话列表"
+					aria-label="展开当前对话列表"
 					onClick={() =>
 						dispatch({
 							type: "SET_WORKER_CHAT_PANEL_COLLAPSED",
@@ -91,7 +91,7 @@ export const WorkerChatSidebar: React.FC = () => {
 						})
 					}
 				>
-					当前会话
+					当前对话
 				</UiButton>
 			)}
 		</>

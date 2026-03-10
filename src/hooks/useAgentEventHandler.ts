@@ -5,7 +5,6 @@ import { parseContentSegments } from '../lib/contentSegments';
 import { parseFrontendToolParams } from '../lib/frontendToolParams';
 import { FRONTEND_VIEWPORT_TYPES } from '../context/constants';
 import { getVoiceRuntime } from '../lib/voiceRuntime';
-import { resolveToolLabel } from '../lib/toolDisplay';
 
 /**
  * Safely extract a string value from an event field.
@@ -335,7 +334,7 @@ export function useAgentEventHandler() {
           node: {
             id: nodeId, kind: 'tool', toolId,
             toolLabel: event.toolLabel || existing?.toolLabel || '',
-            toolName: event.toolName || existing?.toolName || toolId,
+            toolName: event.toolName || existing?.toolName || '',
             toolApi: event.toolApi || existing?.toolApi || '',
             description: event.description || existing?.description || '',
             argsText,
@@ -372,7 +371,7 @@ export function useAgentEventHandler() {
               toolKey,
               toolType,
               toolLabel: event.toolLabel || '',
-              toolName: event.toolName || toolKey,
+              toolName: event.toolName || '',
               description: event.description || '',
               toolTimeout: event.toolTimeout ?? null,
               toolParams: resolvedParams || {},
@@ -447,7 +446,7 @@ export function useAgentEventHandler() {
               kind: 'tool',
               toolId,
               toolLabel: nextToolState.toolLabel || existingNode?.toolLabel || '',
-              toolName: nextToolState.toolName || existingNode?.toolName || toolId,
+              toolName: nextToolState.toolName || existingNode?.toolName || '',
               toolApi: nextToolState.toolApi || existingNode?.toolApi || '',
               description: nextToolState.description || existingNode?.description || '',
               argsText,
@@ -467,12 +466,7 @@ export function useAgentEventHandler() {
             tool: {
               ...active,
               toolLabel: nextToolState.toolLabel || active.toolLabel || '',
-              toolName: nextToolState.toolName || active.toolName || resolveToolLabel({
-                toolLabel: nextToolState.toolLabel,
-                toolName: nextToolState.toolName,
-                toolId,
-                toolKey: nextToolState.toolKey,
-              }),
+              toolName: nextToolState.toolName || active.toolName || '',
               toolParams: parsedToolParams,
             },
           });

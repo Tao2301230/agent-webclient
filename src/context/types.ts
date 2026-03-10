@@ -41,6 +41,12 @@ export interface AgentEvent {
   [key: string]: unknown;
 }
 
+export interface DebugSseEntry {
+  receivedAt: number;
+  rawFrame: string;
+  parsedEventName?: string;
+}
+
 /* ============================================
    Timeline
    ============================================ */
@@ -278,6 +284,7 @@ export interface AppState {
   messageOrder: string[];
   events: AgentEvent[];
   debugLines: string[];
+  rawSseEntries: DebugSseEntry[];
   plan: Plan | null;
   planRuntimeByTaskId: Map<string, PlanRuntime>;
   planCurrentRunningTaskId: string;

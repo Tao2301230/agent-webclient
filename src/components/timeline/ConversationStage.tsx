@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useMemo } from "react";
 import { useAppState } from "../../context/AppContext";
-import { TimelineRow } from "./TimelineRow";
+import { TimelineRow, formatTimelineTime } from "./TimelineRow";
+import { buildTimelineDisplayItems } from "../../lib/timelineDisplay";
 
 export const ConversationStage: React.FC = () => {
 	const state = useAppState();
@@ -20,8 +21,14 @@ export const ConversationStage: React.FC = () => {
 	const timelineEntries = useMemo(() => {
 		return state.timelineOrder
 			.map((id) => state.timelineNodes.get(id))
-			.filter(Boolean);
+			.filter((node): node is NonNullable<typeof node> => Boolean(node));
 	}, [state.timelineOrder, state.timelineNodes]);
+	const displayItems = useMemo(() => {
+		return buildTimelineDisplayItems(
+			timelineEntries,
+			state.events,
+		);
+	}, [timelineEntries, state.events]);
 
 	/* Default behavior: enter with auto-scroll enabled and stay pinned to bottom. */
 	useEffect(() => {
@@ -50,15 +57,59 @@ export const ConversationStage: React.FC = () => {
 		<div className="conversation-stage">
 			<div className="messages-scroll" ref={scrollRef} id="messages">
 				<div className="timeline-stack">
-					{timelineEntries.length === 0 ? (
+					{displayItems.length === 0 ? (
 						<div className="timeline-empty">
 							<p>开始新的对话，或从左侧选择已有对话</p>
 						</div>
 					) : (
 						<div className="timeline-lane">
-							{timelineEntries.map((node) => (
-								<TimelineRow key={node!.id} node={node!} />
-							))}
+							{displayItems.map((item) => {
+								if (item.kind === "query") {
+									return (
+										<TimelineRow
+											key={item.key}
+											node={item.node}
+											showTime
+										/>
+									);
+								}
+
+								if (item.kind === "run") {
+									const time = formatTimelineTime(
+										item.completedAt,
+									);
+									return (
+										<section
+											key={item.key}
+											className="timeline-run-group"
+										>
+											<div className="timeline-run-items">
+												{item.nodes.map((node) => (
+													<TimelineRow
+														key={node.id}
+														node={node}
+													/>
+												))}
+											</div>
+											{time.short && (
+												<div
+													className="timeline-run-time"
+													title={time.full}
+												>
+													{time.short}
+												</div>
+											)}
+										</section>
+									);
+								}
+
+								return (
+									<TimelineRow
+										key={item.key}
+										node={item.node}
+									/>
+								);
+							})}
 						</div>
 					)}
 				</div>

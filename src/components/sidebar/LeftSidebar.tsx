@@ -155,10 +155,11 @@ export const LeftSidebar: React.FC = () => {
 				</UiButton>
 			</div>
 
-			<label className="field-label field-label-spaced" htmlFor="chat-search">
-				搜索
-				{state.conversationMode === "worker" ? "员工或小组" : ""}
-			</label>
+			{state.conversationMode !== "worker" && (
+				<label className="field-label field-label-spaced" htmlFor="chat-search">
+					搜索
+				</label>
+			)}
 			<div className="sidebar-filter-row">
 				<UiInput
 					id="chat-search"

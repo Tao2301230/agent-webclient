@@ -15,6 +15,7 @@ import type {
 	TimelineNode,
 	ToolState,
 	PendingTool,
+	DebugSseEntry,
 	PlanRuntime,
 	Plan,
 	ActiveFrontendTool,
@@ -54,6 +55,7 @@ function createInitialState(): AppState {
 		messageOrder: [],
 		events: [],
 		debugLines: [],
+		rawSseEntries: [],
 		plan: null,
 		planRuntimeByTaskId: new Map(),
 		planCurrentRunningTaskId: "",
@@ -124,6 +126,8 @@ export type AppAction =
 	| { type: "CLEAR_EVENTS" }
 	| { type: "APPEND_DEBUG"; line: string }
 	| { type: "CLEAR_DEBUG" }
+	| { type: "APPEND_RAW_SSE_ENTRY"; entry: DebugSseEntry }
+	| { type: "CLEAR_RAW_SSE_ENTRIES" }
 	| { type: "SET_PLAN"; plan: Plan | null }
 	| { type: "SET_PLAN_EXPANDED"; expanded: boolean }
 	| { type: "SET_PLAN_MANUAL_OVERRIDE"; override: boolean | null }
@@ -222,6 +226,20 @@ function appReducer(state: AppState, action: AppAction): AppState {
 		}
 		case "CLEAR_DEBUG":
 			return { ...state, debugLines: [] };
+		case "APPEND_RAW_SSE_ENTRY": {
+			const rawSseEntries =
+				state.rawSseEntries.length >= MAX_DEBUG_LINES
+					? [
+							...state.rawSseEntries.slice(
+								-Math.floor(MAX_DEBUG_LINES * 0.8),
+							),
+							action.entry,
+						]
+					: [...state.rawSseEntries, action.entry];
+			return { ...state, rawSseEntries };
+		}
+		case "CLEAR_RAW_SSE_ENTRIES":
+			return { ...state, rawSseEntries: [] };
 		case "SET_PLAN":
 			return { ...state, plan: action.plan };
 		case "SET_PLAN_EXPANDED":
@@ -365,6 +383,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
 				messagesById: new Map(),
 				messageOrder: [],
 				events: [],
+				rawSseEntries: [],
 				plan: null,
 				planRuntimeByTaskId: new Map(),
 				planCurrentRunningTaskId: "",

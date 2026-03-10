@@ -132,7 +132,7 @@ export const TopNav: React.FC = () => {
 							}
 						}}
 					>
-						<MaterialIcon name="tune" />
+						<MaterialIcon name="bug_report" />
 					</UiButton>
 					<UiButton
 						className="icon-btn"

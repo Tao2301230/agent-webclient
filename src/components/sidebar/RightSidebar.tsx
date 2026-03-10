@@ -1,77 +1,31 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import { useAppState, useAppDispatch } from "../../context/AppContext";
-import type { AgentEvent, ToolState } from "../../context/types";
+import type { AgentEvent, DebugSseEntry, ToolState } from "../../context/types";
 import type { DebugTab } from "../../context/constants";
 import { DEBUG_TABS } from "../../context/constants";
 import { MaterialIcon } from "../common/MaterialIcon";
 import { UiButton } from "../ui/UiButton";
 import { resolveToolLabel } from "../../lib/toolDisplay";
+import {
+	classifyEventGroup,
+	isErrorEventType,
+	summarizeEvent,
+} from "../../lib/debugEventDisplay";
 
-function safeStr(v: unknown): string {
-	if (typeof v === "string") return v;
-	if (v === null || v === undefined) return "";
-	return String(v);
-}
+const logTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
+	month: "2-digit",
+	day: "2-digit",
+	hour: "2-digit",
+	minute: "2-digit",
+	second: "2-digit",
+	hour12: false,
+});
 
-function classifyEventKind(eventType: string): string {
-	const type = String(eventType || "").toLowerCase();
-	if (/(\.error|\.fail|\.cancel|\.cancelled)$/.test(type)) return "error";
-	if (type === "request.query" || type.startsWith("run.")) return "run";
-	if (type.startsWith("tool.")) return "tool";
-	if (type.startsWith("content.") || type.startsWith("reasoning."))
-		return "content";
-	if (type.startsWith("plan.") || type.startsWith("task.")) return "plan";
-	return "";
-}
-
-function summarizeEvent(event: AgentEvent): string {
-	const keys = [
-		"chatId",
-		"runId",
-		"contentId",
-		"reasoningId",
-		"toolId",
-		"actionId",
-		"planId",
-		"taskId",
-	];
-
-	const kv = keys
-		.filter((key) =>
-			Object.prototype.hasOwnProperty.call(event, key),
-		)
-		.map((key) => `${key}=${safeStr(event[key])}`)
-		.join(" ");
-
-	if (event.type === "request.query") {
-		const message = safeStr(event.message).trim();
-		return message || kv;
-	}
-
-	if (kv) return kv;
-
-	if (
-		event.type === "content.delta" ||
-		event.type === "reasoning.delta"
-	) {
-		return safeStr(event.delta).slice(0, 120);
-	}
-
-	if (
-		event.type === "content.snapshot" ||
-		event.type === "reasoning.snapshot"
-	) {
-		return safeStr(event.text).slice(0, 120);
-	}
-
-	if (event.type === "tool.result") {
-		const result = event.result;
-		return typeof result === "string"
-			? result.slice(0, 120)
-			: safeStr(JSON.stringify(result)).slice(0, 120);
-	}
-
-	return "";
+function formatDebugTime(timestamp?: number): string {
+	if (!timestamp) return "--";
+	const date = new Date(timestamp);
+	if (Number.isNaN(date.getTime())) return "--";
+	return logTimeFormatter.format(date);
 }
 
 const EventRow: React.FC<{
@@ -81,17 +35,15 @@ const EventRow: React.FC<{
 }> = ({ event, index, onClick }) => {
 	const type = String(event.type || "");
 	const seq = event.seq ?? "-";
-	const ts = event.timestamp
-		? new Date(event.timestamp).toLocaleTimeString()
-		: "--";
-	const kindClass = classifyEventKind(type)
-		? `event-kind-${classifyEventKind(type)}`
-		: "";
+	const ts = formatDebugTime(event.timestamp);
+	const group = classifyEventGroup(type);
+	const kindClass = group ? `event-group-${group}` : "";
 	const summary = summarizeEvent(event);
+	const errorClass = isErrorEventType(type) ? "is-error-type" : "";
 
 	return (
 		<div
-			className={`event-row is-clickable ${kindClass}`}
+			className={`event-row is-clickable ${kindClass} ${errorClass}`.trim()}
 			data-event-index={index}
 			onClick={onClick}
 		>
@@ -101,6 +53,20 @@ const EventRow: React.FC<{
 			</div>
 			{summary && <div className="event-row-summary">{summary}</div>}
 		</div>
+	);
+};
+
+const RawSseRow: React.FC<{ entry: DebugSseEntry }> = ({ entry }) => {
+	return (
+		<article className="debug-event-card debug-log-card">
+			<div className="debug-event-head">
+				<strong>{entry.parsedEventName || "message"}</strong>
+				<span className="event-row-time">
+					{formatDebugTime(entry.receivedAt)}
+				</span>
+			</div>
+			<pre className="debug-event-json">{entry.rawFrame}</pre>
+		</article>
 	);
 };
 
@@ -153,8 +119,9 @@ const tabLabels: Record<DebugTab, string> = {
 export const RightSidebar: React.FC = () => {
 	const state = useAppState();
 	const dispatch = useAppDispatch();
-	const debugLogRef = useRef<HTMLPreElement | null>(null);
 	const pendingToolsRef = useRef<HTMLDivElement | null>(null);
+	const rawLogRef = useRef<HTMLDivElement | null>(null);
+	const showHeader = state.layoutMode !== "desktop-fixed";
 
 	const toolEntries = useMemo(() => {
 		return Array.from(state.toolStates.values()).map((toolState) => {
@@ -183,9 +150,7 @@ export const RightSidebar: React.FC = () => {
 			return {
 				toolState,
 				status: String(node?.status || "pending"),
-				tsLabel: node?.ts
-					? new Date(node.ts).toLocaleTimeString()
-					: "--",
+				tsLabel: formatDebugTime(node?.ts),
 				payloadText: toPrettyJson(payload),
 				sortTs: Number(node?.ts || 0),
 			};
@@ -193,10 +158,10 @@ export const RightSidebar: React.FC = () => {
 	}, [state.toolStates, state.toolNodeById, state.timelineNodes]);
 
 	useEffect(() => {
-		const el = debugLogRef.current;
+		const el = rawLogRef.current;
 		if (!el) return;
 		el.scrollTop = el.scrollHeight;
-	}, [state.debugLines, state.activeDebugTab]);
+	}, [state.rawSseEntries, state.activeDebugTab]);
 
 	useEffect(() => {
 		const el = pendingToolsRef.current;
@@ -217,21 +182,23 @@ export const RightSidebar: React.FC = () => {
 			}`}
 			id="right-sidebar"
 		>
-			<div className="sidebar-head">
-				<h2>调试面板</h2>
-				<UiButton
-					className="drawer-close"
-					aria-label="关闭调试面板"
-					variant="ghost"
-					size="sm"
-					iconOnly
-					onClick={() =>
-						dispatch({ type: "SET_RIGHT_DRAWER_OPEN", open: false })
-					}
-				>
-					<MaterialIcon name="close" />
-				</UiButton>
-			</div>
+			{showHeader && (
+				<div className="sidebar-head">
+					<h2>调试面板</h2>
+					<UiButton
+						className="drawer-close"
+						aria-label="关闭调试面板"
+						variant="ghost"
+						size="sm"
+						iconOnly
+						onClick={() =>
+							dispatch({ type: "SET_RIGHT_DRAWER_OPEN", open: false })
+						}
+					>
+						<MaterialIcon name="close" />
+					</UiButton>
+				</div>
+			)}
 
 			<div className="debug-tabs">
 				{DEBUG_TABS.map((tab) => (
@@ -301,21 +268,26 @@ export const RightSidebar: React.FC = () => {
 								className="debug-clear-btn"
 								id="clear-logs-btn"
 								onClick={() =>
-									dispatch({ type: "CLEAR_DEBUG" })
+									dispatch({ type: "CLEAR_RAW_SSE_ENTRIES" })
 								}
 							>
 								清空
 							</button>
 						</div>
-						<pre
-							ref={debugLogRef}
-							className="debug-log"
-							id="debug-log"
-						>
-							{state.debugLines.length === 0
-								? "暂无日志"
-								: state.debugLines.join("\n")}
-						</pre>
+						<div ref={rawLogRef} className="list debug-log-list" id="debug-log">
+							{state.rawSseEntries.length === 0 ? (
+								<div className="status-line">
+									仅实时流期间展示原始 SSE frame；历史回放暂无原始日志
+								</div>
+							) : (
+								state.rawSseEntries.map((entry, idx) => (
+									<RawSseRow
+										key={`${entry.receivedAt}-${idx}`}
+										entry={entry}
+									/>
+								))
+							)}
+						</div>
 					</>
 				)}
 

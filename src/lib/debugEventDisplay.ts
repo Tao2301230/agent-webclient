@@ -1,0 +1,76 @@
+import type { AgentEvent } from '../context/types';
+
+export type DebugEventGroup =
+  | 'chat'
+  | 'run'
+  | 'content'
+  | 'reasoning'
+  | 'tool'
+  | 'action'
+  | 'plan'
+  | '';
+
+function safeStr(v: unknown): string {
+  if (typeof v === 'string') return v;
+  if (v === null || v === undefined) return '';
+  return String(v);
+}
+
+export function classifyEventGroup(eventType: string): DebugEventGroup {
+  const type = String(eventType || '').toLowerCase();
+  if (type === 'request.query' || type.startsWith('chat.')) return 'chat';
+  if (type.startsWith('run.')) return 'run';
+  if (type.startsWith('content.')) return 'content';
+  if (type.startsWith('reasoning.')) return 'reasoning';
+  if (type.startsWith('tool.')) return 'tool';
+  if (type.startsWith('action.')) return 'action';
+  if (type.startsWith('plan.') || type.startsWith('task.')) return 'plan';
+  return '';
+}
+
+export function isErrorEventType(eventType: string): boolean {
+  const type = String(eventType || '').toLowerCase();
+  return /(\.error|\.fail|\.cancel|\.cancelled)$/.test(type);
+}
+
+export function summarizeEvent(event: AgentEvent): string {
+  const keys = [
+    'chatId',
+    'runId',
+    'contentId',
+    'reasoningId',
+    'toolId',
+    'actionId',
+    'planId',
+    'taskId',
+  ];
+
+  const kv = keys
+    .filter((key) => Object.prototype.hasOwnProperty.call(event, key))
+    .map((key) => `${key}=${safeStr(event[key])}`)
+    .join(' ');
+
+  if (event.type === 'request.query') {
+    const message = safeStr(event.message).trim();
+    return message || kv;
+  }
+
+  if (kv) return kv;
+
+  if (event.type === 'content.delta' || event.type === 'reasoning.delta') {
+    return safeStr(event.delta).slice(0, 120);
+  }
+
+  if (event.type === 'content.snapshot' || event.type === 'reasoning.snapshot') {
+    return safeStr(event.text).slice(0, 120);
+  }
+
+  if (event.type === 'tool.result') {
+    const result = event.result;
+    return typeof result === 'string'
+      ? result.slice(0, 120)
+      : safeStr(JSON.stringify(result)).slice(0, 120);
+  }
+
+  return '';
+}

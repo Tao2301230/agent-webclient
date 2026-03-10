@@ -23,19 +23,24 @@ export interface SseEvent {
   id: string | undefined;
   retry: number | undefined;
   comments: string[];
+  rawFrame: string;
+  receivedAt: number;
 }
 
-export function parseSseFrame(frame: string): SseEvent {
+export function parseSseFrame(frame: string, receivedAt = Date.now()): SseEvent {
+  const normalizedFrame = normalizeLineBreaks(frame);
   const parsed: SseEvent = {
     event: 'message',
     data: '',
     id: undefined,
     retry: undefined,
     comments: [],
+    rawFrame: normalizedFrame,
+    receivedAt,
   };
 
   const dataLines: string[] = [];
-  const lines = normalizeLineBreaks(frame).split('\n');
+  const lines = normalizedFrame.split('\n');
 
   for (const rawLine of lines) {
     const line = rawLine ?? '';
@@ -87,6 +92,7 @@ export function parseSseFrame(frame: string): SseEvent {
 
 export interface ConsumeSseOptions {
   onEvent?: (event: SseEvent) => void;
+  onFrame?: (event: SseEvent) => void;
   onComment?: (comments: string[]) => void;
   signal?: AbortSignal;
 }
@@ -96,7 +102,7 @@ export async function consumeSseStream(readable: ReadableStream<Uint8Array>, opt
     throw new Error('ReadableStream is required for SSE parsing');
   }
 
-  const { onEvent, onComment, signal } = options;
+  const { onEvent, onFrame, onComment, signal } = options;
 
   const decoder = new TextDecoder();
   const reader = readable.getReader();
@@ -109,7 +115,8 @@ export async function consumeSseStream(readable: ReadableStream<Uint8Array>, opt
   };
 
   const emitFrame = (frame: string): void => {
-    const parsed = parseSseFrame(frame);
+    const parsed = parseSseFrame(frame, Date.now());
+    onFrame?.(parsed);
     if (parsed.comments.length > 0) {
       onComment?.(parsed.comments);
     }
@@ -143,6 +150,7 @@ export async function consumeSseStream(readable: ReadableStream<Uint8Array>, opt
 
 export interface ConsumeJsonSseOptions {
   onJson?: (json: Record<string, unknown>, event: SseEvent) => void;
+  onFrame?: (event: SseEvent) => void;
   onParseError?: (error: Error, rawData: string, event: SseEvent) => void;
   onComment?: (comments: string[]) => void;
   signal?: AbortSignal;
@@ -153,10 +161,11 @@ export async function consumeJsonSseStream(response: Response, options: ConsumeJ
     throw new Error(`SSE response is not OK: ${response?.status ?? 'unknown'}`);
   }
 
-  const { onJson, onParseError, onComment, signal } = options;
+  const { onJson, onFrame, onParseError, onComment, signal } = options;
 
   await consumeSseStream(response.body!, {
     signal,
+    onFrame,
     onComment,
     onEvent: (event) => {
       if (!event.data) {

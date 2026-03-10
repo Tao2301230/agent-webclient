@@ -104,6 +104,7 @@ function createInitialState(): AppState {
 		accessToken: storedToken,
 		planningMode: false,
 		steerDraft: "",
+		downvotedRunKeys: new Set(),
 		eventPopoverIndex: -1,
 		eventPopoverEventRef: null,
 		eventPopoverAnchor: null,
@@ -150,6 +151,7 @@ export type AppAction =
 	| { type: "SET_ACCESS_TOKEN"; token: string }
 	| { type: "SET_PLANNING_MODE"; enabled: boolean }
 	| { type: "SET_STEER_DRAFT"; draft: string }
+	| { type: "TOGGLE_RUN_DOWNVOTE"; runKey: string }
 	| { type: "SET_MENTION_OPEN"; open: boolean }
 	| { type: "SET_MENTION_SUGGESTIONS"; agents: Agent[] }
 	| { type: "SET_MENTION_ACTIVE_INDEX"; index: number }
@@ -301,6 +303,15 @@ function appReducer(state: AppState, action: AppAction): AppState {
 			return { ...state, planningMode: action.enabled };
 		case "SET_STEER_DRAFT":
 			return { ...state, steerDraft: action.draft };
+		case "TOGGLE_RUN_DOWNVOTE": {
+			const downvotedRunKeys = new Set(state.downvotedRunKeys);
+			if (downvotedRunKeys.has(action.runKey)) {
+				downvotedRunKeys.delete(action.runKey);
+			} else {
+				downvotedRunKeys.add(action.runKey);
+			}
+			return { ...state, downvotedRunKeys };
+		}
 		case "SET_MENTION_OPEN":
 			return { ...state, mentionOpen: action.open };
 		case "SET_MENTION_SUGGESTIONS":
@@ -414,6 +425,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
 				workerRelatedChats: [],
 				workerChatPanelCollapsed: true,
 				steerDraft: "",
+				downvotedRunKeys: new Set(),
 				eventPopoverIndex: -1,
 				eventPopoverEventRef: null,
 				eventPopoverAnchor: null,

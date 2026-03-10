@@ -766,11 +766,45 @@ textarea {
 }
 
 .timeline-run-time {
-  margin-left: 24px;
   font-size: 10px;
   line-height: 1;
   color: var(--ink-muted);
   letter-spacing: 0.02em;
+}
+
+.timeline-meta-row,
+.timeline-run-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.timeline-run-meta {
+  margin-left: 24px;
+}
+
+.timeline-meta-btn {
+  min-height: 22px !important;
+  padding: 0 8px !important;
+  border-radius: 999px !important;
+  color: var(--ink-muted);
+}
+
+.timeline-meta-btn .ui-btn-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.timeline-meta-btn .material-symbols-rounded {
+  font-size: 14px;
+}
+
+.timeline-meta-btn.is-downvoted,
+.timeline-meta-btn.is-active {
+  color: color-mix(in srgb, var(--accent-danger) 78%, var(--ink-1));
+  background: color-mix(in srgb, var(--accent-danger) 12%, transparent);
 }
 
 .timeline-text {
@@ -891,11 +925,11 @@ textarea {
 }
 
 .thinking-detail.is-open {
-  max-height: 300px;
+  max-height: none;
   opacity: 1;
   margin-top: 6px;
   padding: 0;
-  overflow: auto;
+  overflow: visible;
 }
 
 /* ========================================
@@ -1338,6 +1372,10 @@ textarea {
   box-shadow: none;
 }
 
+.steer-cancel-btn {
+  min-width: 64px;
+}
+
 /* ========================================
    Mention Suggest
    ======================================== */
@@ -1354,6 +1392,70 @@ textarea {
   max-height: 260px;
   overflow-y: auto;
   z-index: 10;
+}
+
+.slash-command-popover {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 6px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--bg-elev-2);
+  box-shadow: var(--shadow-medium);
+  z-index: 11;
+}
+
+.slash-command-list {
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.slash-command-item {
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.slash-command-item .ui-btn-label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.slash-command-item.active,
+.slash-command-item:hover {
+  background: var(--bg-hover);
+}
+
+.slash-command-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slash-command-name {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-electric-strong);
+}
+
+.slash-command-label {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.slash-command-description {
+  font-size: 11px;
+  color: var(--ink-muted);
 }
 
 .mention-suggest-list {

@@ -14,7 +14,8 @@ export const FrontendToolContainer: React.FC = () => {
 	);
 
 	useEffect(() => {
-		if (!tool || tool.loading || tool.viewportHtml || !tool.toolKey) return;
+		if (!tool || tool.loading || tool.viewportHtml || !tool.viewportKey)
+			return;
 
 		const expectedKey = tool.key;
 		dispatch({
@@ -22,7 +23,7 @@ export const FrontendToolContainer: React.FC = () => {
 			tool: { ...tool, loading: true, loadError: "" },
 		});
 
-		getViewport(tool.toolKey)
+		getViewport(tool.viewportKey)
 			.then((response) => {
 				if (state.activeFrontendTool?.key !== expectedKey) return;
 				const payload = response.data as Record<string, unknown> | null;
@@ -72,7 +73,7 @@ export const FrontendToolContainer: React.FC = () => {
 					data: {
 						runId: tool.runId,
 						toolId: tool.toolId,
-						toolKey: tool.toolKey,
+						viewportKey: tool.viewportKey,
 						toolType: tool.toolType,
 						toolTimeout: tool.toolTimeout,
 						params: tool.toolParams || {},

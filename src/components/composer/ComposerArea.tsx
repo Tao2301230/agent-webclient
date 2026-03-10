@@ -1,10 +1,16 @@
-import React, { useRef, useCallback, useState, useEffect } from "react";
+import React, { useRef, useCallback, useState, useEffect, useMemo } from "react";
 import { useAppState, useAppDispatch } from "../../context/AppContext";
 import { MentionSuggest } from "./MentionSuggest";
 import { COMPOSER_MAX_LINES } from "../../context/constants";
 import { createRequestId, interruptChat, steerChat } from "../../lib/apiClient";
 import { parseLeadingMentionDraft } from "../../lib/mentionParser";
 import { resolveMentionCandidatesFromState } from "../../lib/mentionCandidates";
+import {
+	getFilteredSlashCommands,
+	getLatestQueryText,
+	isSlashCommandDisabled,
+	type SlashCommandId,
+} from "../../lib/slashCommands";
 import { MaterialIcon } from "../common/MaterialIcon";
 import { UiButton } from "../ui/UiButton";
 
@@ -33,20 +39,54 @@ type SpeechConstructor = new () => SpeechRecognitionLike;
 export const ComposerArea: React.FC = () => {
 	const state = useAppState();
 	const dispatch = useAppDispatch();
+	const composerRef = useRef<HTMLDivElement>(null);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const plusMenuRef = useRef<HTMLDivElement>(null);
 	const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
 	const speechBaseValueRef = useRef("");
 	const speechFinalBufferRef = useRef("");
 	const speechListeningRef = useRef(false);
+	const pendingSendRef = useRef(false);
+	const pendingSentMessageRef = useRef("");
 	const [inputValue, setInputValue] = useState("");
 	const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+	const [slashDismissed, setSlashDismissed] = useState(false);
+	const [activeSlashIndex, setActiveSlashIndex] = useState(0);
 	const [speechSupported, setSpeechSupported] = useState(false);
 	const [speechListening, setSpeechListening] = useState(false);
 	const [speechStatus, setSpeechStatus] = useState("点击开始听写");
 	const [steerSubmitting, setSteerSubmitting] = useState(false);
 
 	const isFrontendActive = !!state.activeFrontendTool;
+	const timelineEntries = useMemo(() => {
+		return state.timelineOrder
+			.map((id) => state.timelineNodes.get(id))
+			.filter((node): node is NonNullable<typeof node> => Boolean(node));
+	}, [state.timelineOrder, state.timelineNodes]);
+	const latestQueryText = useMemo(
+		() => getLatestQueryText(timelineEntries),
+		[timelineEntries],
+	);
+	const slashCommands = useMemo(
+		() => getFilteredSlashCommands(inputValue),
+		[inputValue],
+	);
+	const showSlashPalette =
+		!isFrontendActive && !slashDismissed && slashCommands.length > 0;
+	const slashAvailability = useMemo(
+		() => ({
+			streaming: state.streaming,
+			hasLatestQuery: Boolean(latestQueryText),
+			speechSupported,
+			isFrontendActive,
+		}),
+		[
+			state.streaming,
+			latestQueryText,
+			speechSupported,
+			isFrontendActive,
+		],
+	);
 
 	const autoresize = useCallback(() => {
 		const el = textareaRef.current;
@@ -79,28 +119,42 @@ export const ComposerArea: React.FC = () => {
 	}, []);
 
 	useEffect(() => {
-		if (!plusMenuOpen) return;
+		if (!plusMenuOpen && !showSlashPalette) return;
 
 		const onPointerDown = (event: MouseEvent) => {
 			const target = event.target as Node | null;
 			if (!target) return;
-			if (plusMenuRef.current?.contains(target)) return;
-			setPlusMenuOpen(false);
+			if (
+				plusMenuOpen &&
+				!plusMenuRef.current?.contains(target)
+			) {
+				setPlusMenuOpen(false);
+			}
+			if (
+				showSlashPalette &&
+				!composerRef.current?.contains(target)
+			) {
+				setSlashDismissed(true);
+			}
 		};
 
-		const onEsc = (event: KeyboardEvent) => {
-			if (event.key === "Escape") {
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key !== "Escape") return;
+			if (plusMenuOpen) {
 				setPlusMenuOpen(false);
+			}
+			if (showSlashPalette) {
+				setSlashDismissed(true);
 			}
 		};
 
 		document.addEventListener("mousedown", onPointerDown);
-		document.addEventListener("keydown", onEsc);
+		document.addEventListener("keydown", onKeyDown);
 		return () => {
 			document.removeEventListener("mousedown", onPointerDown);
-			document.removeEventListener("keydown", onEsc);
+			document.removeEventListener("keydown", onKeyDown);
 		};
-	}, [plusMenuOpen]);
+	}, [plusMenuOpen, showSlashPalette]);
 
 	const closeMention = useCallback(() => {
 		dispatch({ type: "SET_MENTION_OPEN", open: false });
@@ -145,6 +199,7 @@ export const ComposerArea: React.FC = () => {
 			const displayLabel = String(target.name || "").trim() || target.key;
 			const next = `@${displayLabel} `;
 			setInputValue(next);
+			setSlashDismissed(false);
 			closeMention();
 			window.requestAnimationFrame(() => {
 				const el = textareaRef.current;
@@ -157,21 +212,27 @@ export const ComposerArea: React.FC = () => {
 		[closeMention, state.mentionSuggestions],
 	);
 
-	const handleSend = useCallback(() => {
-		const message = inputValue.trim();
-		if (!message) return;
-		if (state.streaming) {
-			dispatch({ type: "SET_STEER_DRAFT", draft: message });
-			setInputValue("");
-			closeMention();
+	useEffect(() => {
+		if (!showSlashPalette) {
+			setActiveSlashIndex(0);
 			return;
 		}
-		setInputValue("");
-		/* Dispatch a custom event so hooks can pick up the send action */
-		window.dispatchEvent(
-			new CustomEvent("agent:send-message", { detail: { message } }),
-		);
-	}, [closeMention, dispatch, inputValue, state.streaming]);
+		if (activeSlashIndex >= slashCommands.length) {
+			setActiveSlashIndex(0);
+		}
+	}, [activeSlashIndex, showSlashPalette, slashCommands.length]);
+
+	useEffect(() => {
+		const message = inputValue.trim();
+		if (!message) {
+			pendingSendRef.current = false;
+			pendingSentMessageRef.current = "";
+			return;
+		}
+		if (message !== pendingSentMessageRef.current) {
+			pendingSendRef.current = false;
+		}
+	}, [inputValue]);
 
 	const mergeSpeechText = useCallback((base: string, append: string) => {
 		if (!append) return base;
@@ -255,6 +316,7 @@ export const ComposerArea: React.FC = () => {
 					`${speechFinalBufferRef.current}${interimDelta}`,
 				);
 				setInputValue(next);
+				setSlashDismissed(false);
 				updateMentionSuggestions(next);
 			};
 			speechRecognitionRef.current = recognition;
@@ -276,59 +338,6 @@ export const ComposerArea: React.FC = () => {
 			startSpeechInput();
 		}
 	}, [startSpeechInput, stopSpeechInput]);
-
-	const handleKeyDown = useCallback(
-		(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-			if (state.mentionOpen && state.mentionSuggestions.length > 0) {
-				if (e.key === "ArrowDown") {
-					e.preventDefault();
-					dispatch({
-						type: "SET_MENTION_ACTIVE_INDEX",
-						index:
-							(state.mentionActiveIndex + 1) %
-							state.mentionSuggestions.length,
-					});
-					return;
-				}
-				if (e.key === "ArrowUp") {
-					e.preventDefault();
-					dispatch({
-						type: "SET_MENTION_ACTIVE_INDEX",
-						index:
-							(state.mentionActiveIndex -
-								1 +
-								state.mentionSuggestions.length) %
-							state.mentionSuggestions.length,
-					});
-					return;
-				}
-				if (e.key === "Escape") {
-					e.preventDefault();
-					closeMention();
-					return;
-				}
-				if (e.key === "Enter" && !e.shiftKey) {
-					e.preventDefault();
-					selectMentionByIndex(state.mentionActiveIndex);
-					return;
-				}
-			}
-
-			if (e.key === "Enter" && !e.shiftKey) {
-				e.preventDefault();
-				handleSend();
-			}
-		},
-		[
-			handleSend,
-			state.mentionOpen,
-			state.mentionSuggestions,
-			state.mentionActiveIndex,
-			dispatch,
-			closeMention,
-			selectMentionByIndex,
-		],
-	);
 
 	const resolveCurrentRunId = useCallback(() => {
 		const fromState = String(state.runId || "").trim();
@@ -364,7 +373,7 @@ export const ComposerArea: React.FC = () => {
 		return String(selected.sourceId || "").trim();
 	}, [state.chatId, state.workerIndexByKey, state.workerSelectionKey]);
 
-	const handleInterrupt = useCallback(async () => {
+	const interruptCurrentRun = useCallback(async () => {
 		const chatId = String(state.chatId || "").trim();
 		const runId = resolveCurrentRunId();
 		const requestId = createRequestId("req");
@@ -416,6 +425,212 @@ export const ComposerArea: React.FC = () => {
 		state.abortController,
 		state.planningMode,
 	]);
+
+	const executeSlashCommand = useCallback(
+		async (commandId: SlashCommandId) => {
+			if (isSlashCommandDisabled(commandId, slashAvailability)) {
+				return;
+			}
+
+			setSlashDismissed(true);
+			setInputValue("");
+			closeMention();
+			setPlusMenuOpen(false);
+
+			switch (commandId) {
+				case "new":
+					state.abortController?.abort();
+					window.dispatchEvent(new CustomEvent("agent:voice-reset"));
+					dispatch({ type: "SET_CHAT_ID", chatId: "" });
+					dispatch({ type: "SET_RUN_ID", runId: "" });
+					dispatch({ type: "SET_REQUEST_ID", requestId: "" });
+					dispatch({ type: "SET_STREAMING", streaming: false });
+					dispatch({ type: "SET_ABORT_CONTROLLER", controller: null });
+					dispatch({ type: "RESET_CONVERSATION" });
+					return;
+				case "redo":
+					window.dispatchEvent(
+						new CustomEvent("agent:send-message", {
+							detail: { message: latestQueryText },
+						}),
+					);
+					return;
+				case "debug":
+					if (state.layoutMode === "desktop-fixed") {
+						dispatch({
+							type: "SET_DESKTOP_DEBUG_SIDEBAR_ENABLED",
+							enabled: !state.desktopDebugSidebarEnabled,
+						});
+					} else {
+						dispatch({
+							type: "SET_RIGHT_DRAWER_OPEN",
+							open: !state.rightDrawerOpen,
+						});
+					}
+					return;
+				case "voice":
+					toggleSpeechInput();
+					return;
+				case "settings":
+					dispatch({ type: "SET_SETTINGS_OPEN", open: true });
+					return;
+				case "plan":
+					dispatch({
+						type: "SET_PLANNING_MODE",
+						enabled: !state.planningMode,
+					});
+					return;
+				case "stop":
+					await interruptCurrentRun();
+			}
+		},
+		[
+			closeMention,
+			dispatch,
+			interruptCurrentRun,
+			latestQueryText,
+			slashAvailability,
+			state.abortController,
+			state.desktopDebugSidebarEnabled,
+			state.layoutMode,
+			state.planningMode,
+			state.rightDrawerOpen,
+			toggleSpeechInput,
+		],
+	);
+
+	const handleSend = useCallback(() => {
+		if (showSlashPalette) {
+			const selected = slashCommands[activeSlashIndex] || slashCommands[0];
+			if (selected) {
+				void executeSlashCommand(selected.id);
+			}
+			return;
+		}
+
+		const message = inputValue.trim();
+		if (!message) return;
+		if (
+			pendingSendRef.current &&
+			pendingSentMessageRef.current === message
+		) {
+			return;
+		}
+		if (state.streaming) {
+			dispatch({ type: "SET_STEER_DRAFT", draft: message });
+			setInputValue("");
+			setSlashDismissed(false);
+			closeMention();
+			return;
+		}
+		pendingSendRef.current = true;
+		pendingSentMessageRef.current = message;
+		setInputValue("");
+		setSlashDismissed(false);
+		closeMention();
+		window.dispatchEvent(
+			new CustomEvent("agent:send-message", { detail: { message } }),
+		);
+	}, [
+		activeSlashIndex,
+		closeMention,
+		dispatch,
+		executeSlashCommand,
+		inputValue,
+		showSlashPalette,
+		slashCommands,
+		state.streaming,
+	]);
+
+	const handleKeyDown = useCallback(
+		(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+			if (showSlashPalette) {
+				if (e.key === "ArrowDown") {
+					e.preventDefault();
+					setActiveSlashIndex(
+						(current) => (current + 1) % slashCommands.length,
+					);
+					return;
+				}
+				if (e.key === "ArrowUp") {
+					e.preventDefault();
+					setActiveSlashIndex(
+						(current) =>
+							(current - 1 + slashCommands.length) %
+							slashCommands.length,
+					);
+					return;
+				}
+				if (e.key === "Escape") {
+					e.preventDefault();
+					setSlashDismissed(true);
+					return;
+				}
+				if (e.key === "Enter" && !e.shiftKey) {
+					e.preventDefault();
+					const selected =
+						slashCommands[activeSlashIndex] || slashCommands[0];
+					if (selected) {
+						void executeSlashCommand(selected.id);
+					}
+					return;
+				}
+			}
+
+			if (state.mentionOpen && state.mentionSuggestions.length > 0) {
+				if (e.key === "ArrowDown") {
+					e.preventDefault();
+					dispatch({
+						type: "SET_MENTION_ACTIVE_INDEX",
+						index:
+							(state.mentionActiveIndex + 1) %
+							state.mentionSuggestions.length,
+					});
+					return;
+				}
+				if (e.key === "ArrowUp") {
+					e.preventDefault();
+					dispatch({
+						type: "SET_MENTION_ACTIVE_INDEX",
+						index:
+							(state.mentionActiveIndex -
+								1 +
+								state.mentionSuggestions.length) %
+							state.mentionSuggestions.length,
+					});
+					return;
+				}
+				if (e.key === "Escape") {
+					e.preventDefault();
+					closeMention();
+					return;
+				}
+				if (e.key === "Enter" && !e.shiftKey) {
+					e.preventDefault();
+					selectMentionByIndex(state.mentionActiveIndex);
+					return;
+				}
+			}
+
+			if (e.key === "Enter" && !e.shiftKey) {
+				e.preventDefault();
+				handleSend();
+			}
+		},
+		[
+			activeSlashIndex,
+			closeMention,
+			dispatch,
+			executeSlashCommand,
+			handleSend,
+			selectMentionByIndex,
+			showSlashPalette,
+			slashCommands,
+			state.mentionActiveIndex,
+			state.mentionOpen,
+			state.mentionSuggestions,
+		],
+	);
 
 	const handleSteer = useCallback(async () => {
 		const message = state.steerDraft.trim();
@@ -470,6 +685,21 @@ export const ComposerArea: React.FC = () => {
 		steerSubmitting,
 	]);
 
+	const handleCancelSteer = useCallback(() => {
+		const draft = String(state.steerDraft || "");
+		dispatch({ type: "SET_STEER_DRAFT", draft: "" });
+		setInputValue(draft);
+		setSlashDismissed(false);
+		updateMentionSuggestions(draft);
+		window.requestAnimationFrame(() => {
+			const el = textareaRef.current;
+			if (!el) return;
+			el.focus();
+			const caret = draft.length;
+			el.setSelectionRange(caret, caret);
+		});
+	}, [dispatch, state.steerDraft, updateMentionSuggestions]);
+
 	useEffect(() => {
 		const onSelectMention = (event: Event) => {
 			const agentKey = String(
@@ -481,6 +711,7 @@ export const ComposerArea: React.FC = () => {
 			if (!agentKey) return;
 			const displayLabel = agentName || agentKey;
 			setInputValue(`@${displayLabel} `);
+			setSlashDismissed(false);
 			closeMention();
 		};
 
@@ -494,6 +725,7 @@ export const ComposerArea: React.FC = () => {
 		const draft = String(state.steerDraft || "").trim();
 		if (!draft) return;
 		setInputValue(draft);
+		setSlashDismissed(false);
 		updateMentionSuggestions(draft);
 		dispatch({ type: "SET_STEER_DRAFT", draft: "" });
 	}, [
@@ -518,8 +750,44 @@ export const ComposerArea: React.FC = () => {
 
 	return (
 		<div
+			ref={composerRef}
 			className={`composer-area ${isFrontendActive ? "is-frontend-active" : ""}`}
 		>
+			{showSlashPalette && (
+				<div className="slash-command-popover">
+					<div className="slash-command-list">
+						{slashCommands.map((command, index) => {
+							const disabled = isSlashCommandDisabled(
+								command.id,
+								slashAvailability,
+							);
+							return (
+								<UiButton
+									key={command.id}
+									className={`slash-command-item ${index === activeSlashIndex ? "active" : ""}`}
+									variant="ghost"
+									size="sm"
+									disabled={disabled}
+									onMouseDown={(e) => e.preventDefault()}
+									onClick={() => void executeSlashCommand(command.id)}
+								>
+									<span className="slash-command-main">
+										<span className="slash-command-name">
+											{command.command}
+										</span>
+										<span className="slash-command-label">
+											{command.label}
+										</span>
+									</span>
+									<span className="slash-command-description">
+										{command.description}
+									</span>
+								</UiButton>
+							);
+						})}
+					</div>
+				</div>
+			)}
 			{state.mentionOpen && <MentionSuggest />}
 			{state.streaming && state.steerDraft.trim() && !isFrontendActive && (
 				<div className="steer-bar">
@@ -540,6 +808,15 @@ export const ComposerArea: React.FC = () => {
 					>
 						{steerSubmitting ? "提交中..." : "引导"}
 					</UiButton>
+					<UiButton
+						className="steer-cancel-btn"
+						variant="ghost"
+						size="sm"
+						disabled={steerSubmitting}
+						onClick={handleCancelSteer}
+					>
+						取消
+					</UiButton>
 				</div>
 			)}
 			<div
@@ -559,7 +836,13 @@ export const ComposerArea: React.FC = () => {
 					onChange={(e) => {
 						const next = e.target.value;
 						setInputValue(next);
-						updateMentionSuggestions(next);
+						setSlashDismissed(false);
+						if (slashCommands.length > 0 || next.startsWith("/")) {
+							closeMention();
+						}
+						if (!next.startsWith("/")) {
+							updateMentionSuggestions(next);
+						}
 					}}
 					onKeyDown={handleKeyDown}
 				/>
@@ -620,7 +903,7 @@ export const ComposerArea: React.FC = () => {
 								variant="danger"
 								size="sm"
 								disabled={isFrontendActive}
-								onClick={handleInterrupt}
+								onClick={() => void interruptCurrentRun()}
 							>
 								<MaterialIcon name="stop" />
 							</UiButton>

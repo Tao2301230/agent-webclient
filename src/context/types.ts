@@ -30,9 +30,9 @@ export interface AgentEvent {
   toolLabel?: string;
   toolName?: string;
   toolType?: string;
+  viewportKey?: string;
   toolKey?: string;
   toolTimeout?: number | null;
-  toolApi?: string;
   toolParams?: Record<string, unknown>;
   description?: string;
   actionName?: string;
@@ -94,7 +94,7 @@ export interface TimelineNode {
   toolId?: string;
   toolLabel?: string;
   toolName?: string;
-  toolApi?: string;
+  viewportKey?: string;
   description?: string;
   argsText?: string;
   result?: ToolResultPayload | null;
@@ -114,9 +114,8 @@ export interface ToolState {
   toolLabel?: string;
   toolName: string;
   toolType: string;
-  toolKey: string;
+  viewportKey: string;
   toolTimeout: number | null;
-  toolApi: string;
   toolParams: Record<string, unknown> | null;
   description: string;
   runId: string;
@@ -137,8 +136,7 @@ export interface PendingTool {
   toolId: string;
   toolLabel?: string;
   toolName: string;
-  toolApi: string;
-  toolKey: string;
+  viewportKey: string;
   toolType: string;
   description: string;
   payloadText: string;
@@ -174,7 +172,7 @@ export interface ActiveFrontendTool {
   key: string;
   runId: string;
   toolId: string;
-  toolKey: string;
+  viewportKey: string;
   toolType: string;
   toolLabel?: string;
   toolName: string;
@@ -328,6 +326,7 @@ export interface AppState {
   accessToken: string;
   planningMode: boolean;
   steerDraft: string;
+  downvotedRunKeys: Set<string>;
   eventPopoverIndex: number;
   eventPopoverEventRef: AgentEvent | null;
   eventPopoverAnchor: { x: number; y: number } | null;

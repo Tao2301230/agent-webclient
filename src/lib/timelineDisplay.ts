@@ -9,6 +9,7 @@ export type TimelineDisplayItem =
   | {
     kind: 'run';
     key: string;
+    queryNode: TimelineNode;
     nodes: TimelineNode[];
     completedAt?: number;
   }
@@ -62,6 +63,7 @@ export function buildTimelineDisplayItems(
     items.push({
       kind: 'run',
       key: `run_${activeQueryNode.id}`,
+      queryNode: activeQueryNode,
       nodes: pendingRunNodes,
       completedAt,
     });

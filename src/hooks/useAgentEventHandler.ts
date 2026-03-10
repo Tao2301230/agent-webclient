@@ -4,6 +4,7 @@ import type { AgentEvent, TimelineNode, ToolState } from '../context/types';
 import { parseContentSegments } from '../lib/contentSegments';
 import { parseFrontendToolParams } from '../lib/frontendToolParams';
 import { FRONTEND_VIEWPORT_TYPES } from '../context/constants';
+import { pickToolName, resolveViewportKey } from '../lib/toolEvent';
 import { getVoiceRuntime } from '../lib/voiceRuntime';
 
 /**
@@ -311,6 +312,7 @@ export function useAgentEventHandler() {
       if (type === 'tool.start' || type === 'tool.snapshot') {
         const toolId = event.toolId || '';
         if (!toolId) return;
+        const viewportKey = resolveViewportKey(event);
 
         let nodeId = cache.toolNodeById.get(toolId);
         const existingMappedNode = nodeId ? state.timelineNodes.get(nodeId) : undefined;
@@ -334,8 +336,8 @@ export function useAgentEventHandler() {
           node: {
             id: nodeId, kind: 'tool', toolId,
             toolLabel: event.toolLabel || existing?.toolLabel || '',
-            toolName: event.toolName || existing?.toolName || '',
-            toolApi: event.toolApi || existing?.toolApi || '',
+            toolName: pickToolName(existing?.toolName, event.toolName),
+            viewportKey: viewportKey || existing?.viewportKey || '',
             description: event.description || existing?.description || '',
             argsText,
             status: type === 'tool.snapshot' ? 'completed' : 'running',
@@ -348,11 +350,10 @@ export function useAgentEventHandler() {
           state: {
             toolId, argsBuffer: '',
             toolLabel: event.toolLabel || '',
-            toolName: event.toolName || '',
+            toolName: pickToolName(event.toolName),
             toolType: event.toolType || '',
-            toolKey: event.toolKey || '',
+            viewportKey,
             toolTimeout: event.toolTimeout ?? null,
-            toolApi: event.toolApi || '',
             toolParams: resolvedParams,
             description: event.description || '',
             runId: event.runId || '',
@@ -360,18 +361,17 @@ export function useAgentEventHandler() {
         });
         /* Activate frontend tool overlay for special tool types (e.g. fireworks) */
         const toolType = String(event.toolType || '').trim().toLowerCase();
-        const toolKey = event.toolKey || '';
-        if (type === 'tool.start' && toolKey && FRONTEND_VIEWPORT_TYPES.has(toolType)) {
+        if (type === 'tool.start' && viewportKey && FRONTEND_VIEWPORT_TYPES.has(toolType)) {
           dispatch({
             type: 'SET_ACTIVE_FRONTEND_TOOL',
             tool: {
               key: `${event.runId || ''}#${toolId}`,
               runId: event.runId || '',
               toolId,
-              toolKey,
+              viewportKey,
               toolType,
               toolLabel: event.toolLabel || '',
-              toolName: event.toolName || '',
+              toolName: pickToolName(event.toolName),
               description: event.description || '',
               toolTimeout: event.toolTimeout ?? null,
               toolParams: resolvedParams || {},
@@ -389,6 +389,7 @@ export function useAgentEventHandler() {
         const toolId = event.toolId;
         const existingToolState = state.toolStates.get(toolId);
         const nextArgsBuffer = `${existingToolState?.argsBuffer || ''}${String(event.delta || '')}`;
+        const viewportKey = resolveViewportKey(event) || existingToolState?.viewportKey || '';
 
         let parsedToolParams: Record<string, unknown> | null = existingToolState?.toolParams || null;
         try {
@@ -404,14 +405,13 @@ export function useAgentEventHandler() {
           toolId,
           argsBuffer: nextArgsBuffer,
           toolLabel: event.toolLabel || existingToolState?.toolLabel || '',
-          toolName: event.toolName || existingToolState?.toolName || '',
+          toolName: pickToolName(existingToolState?.toolName, event.toolName),
           toolType: event.toolType || existingToolState?.toolType || '',
-          toolKey: event.toolKey || existingToolState?.toolKey || '',
+          viewportKey,
           toolTimeout:
             event.toolTimeout ??
             existingToolState?.toolTimeout ??
             null,
-          toolApi: event.toolApi || existingToolState?.toolApi || '',
           toolParams: parsedToolParams,
           description: event.description || existingToolState?.description || '',
           runId: event.runId || existingToolState?.runId || state.runId || '',
@@ -446,8 +446,8 @@ export function useAgentEventHandler() {
               kind: 'tool',
               toolId,
               toolLabel: nextToolState.toolLabel || existingNode?.toolLabel || '',
-              toolName: nextToolState.toolName || existingNode?.toolName || '',
-              toolApi: nextToolState.toolApi || existingNode?.toolApi || '',
+              toolName: pickToolName(existingNode?.toolName, nextToolState.toolName),
+              viewportKey: viewportKey || existingNode?.viewportKey || '',
               description: nextToolState.description || existingNode?.description || '',
               argsText,
               status: 'running',

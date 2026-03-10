@@ -20,7 +20,7 @@ export const FrontendToolOverlay: React.FC = () => {
 	useEffect(() => {
 		if (
 			!activeTool ||
-			!activeTool.toolKey ||
+			!activeTool.viewportKey ||
 			activeTool.viewportHtml ||
 			activeTool.loading
 		)
@@ -32,7 +32,7 @@ export const FrontendToolOverlay: React.FC = () => {
 			tool: { ...activeTool, loading: true, loadError: "" },
 		});
 
-		getViewport(activeTool.toolKey)
+		getViewport(activeTool.viewportKey)
 			.then((response) => {
 				const data = response.data as Record<string, unknown>;
 				const html =
@@ -74,7 +74,7 @@ export const FrontendToolOverlay: React.FC = () => {
 						type: "init",
 						toolLabel: activeTool.toolLabel,
 						toolName: activeTool.toolName,
-						toolKey: activeTool.toolKey,
+						viewportKey: activeTool.viewportKey,
 						params: activeTool.toolParams || {},
 					},
 					"*",
@@ -89,7 +89,7 @@ export const FrontendToolOverlay: React.FC = () => {
 	}, [
 		activeTool?.viewportHtml,
 		activeTool?.toolName,
-		activeTool?.toolKey,
+		activeTool?.viewportKey,
 		activeTool?.toolParams,
 	]);
 
@@ -149,7 +149,7 @@ export const FrontendToolOverlay: React.FC = () => {
 						className="frontend-tool-frame"
 						srcDoc={activeTool.viewportHtml}
 						sandbox="allow-scripts allow-same-origin allow-popups"
-						title={`frontend-tool-${activeTool.toolKey}`}
+						title={`frontend-tool-${activeTool.viewportKey}`}
 					/>
 				)}
 			</div>

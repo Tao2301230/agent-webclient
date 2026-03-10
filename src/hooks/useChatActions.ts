@@ -4,6 +4,7 @@ import { getAgents, getTeams, getChats, getChat, setAccessToken } from '../lib/a
 import type { Chat, Agent, AgentEvent, TimelineNode, Plan, PlanRuntime, ToolState, Team, WorkerRow, TtsVoiceBlock } from '../context/types';
 import { parseContentSegments } from '../lib/contentSegments';
 import { parseFrontendToolParams } from '../lib/frontendToolParams';
+import { pickToolName, resolveViewportKey } from '../lib/toolEvent';
 import { buildWorkerRows, createWorkerKeyFromChat } from '../lib/workerListFormatter';
 import { buildWorkerConversationRows } from '../lib/workerConversationFormatter';
 
@@ -24,7 +25,7 @@ function safeText(value: unknown): string {
  * Avoids React batching issues by building up the full timeline locally,
  * then dispatching the complete result via BATCH_UPDATE.
  */
-interface ReplayState {
+export interface ReplayState {
   timelineNodes: Map<string, TimelineNode>;
   timelineOrder: string[];
   contentNodeById: Map<string, string>;
@@ -44,7 +45,7 @@ interface ReplayState {
   planLastTouchedTaskId: string;
 }
 
-function createReplayState(): ReplayState {
+export function createReplayState(): ReplayState {
   return {
     timelineNodes: new Map(),
     timelineOrder: [],
@@ -101,7 +102,7 @@ function buildHistoryTtsVoiceBlocks(
  * Process a single event into the mutable replay state.
  * This mirrors useAgentEventHandler logic but writes to mutable state.
  */
-function replayEvent(rs: ReplayState, event: AgentEvent): void {
+export function replayEvent(rs: ReplayState, event: AgentEvent): void {
   const type = String(event.type || '');
   rs.events.push(event);
 
@@ -303,6 +304,7 @@ function replayEvent(rs: ReplayState, event: AgentEvent): void {
   if (type === 'tool.start' || type === 'tool.snapshot') {
     const toolId = event.toolId || '';
     if (!toolId) return;
+    const viewportKey = resolveViewportKey(event);
     let nodeId = rs.toolNodeById.get(toolId);
     const existingMappedNode = nodeId ? rs.timelineNodes.get(nodeId) : undefined;
     if (!nodeId || isTerminalStatus(existingMappedNode?.status)) {
@@ -320,8 +322,8 @@ function replayEvent(rs: ReplayState, event: AgentEvent): void {
     rs.timelineNodes.set(nodeId, {
       id: nodeId, kind: 'tool', toolId,
       toolLabel: event.toolLabel || existing?.toolLabel || '',
-      toolName: event.toolName || existing?.toolName || '',
-      toolApi: event.toolApi || existing?.toolApi || '',
+      toolName: pickToolName(existing?.toolName, event.toolName),
+      viewportKey: viewportKey || existing?.viewportKey || '',
       description: event.description || existing?.description || '',
       argsText,
       status: type === 'tool.snapshot' ? 'completed' : 'running',
@@ -334,11 +336,10 @@ function replayEvent(rs: ReplayState, event: AgentEvent): void {
       toolId,
       argsBuffer: existingTs?.argsBuffer || '',
       toolLabel: event.toolLabel || existingTs?.toolLabel || '',
-      toolName: event.toolName || existingTs?.toolName || '',
+      toolName: pickToolName(existingTs?.toolName, event.toolName),
       toolType: event.toolType || existingTs?.toolType || '',
-      toolKey: event.toolKey || existingTs?.toolKey || '',
+      viewportKey: viewportKey || existingTs?.viewportKey || '',
       toolTimeout: event.toolTimeout ?? existingTs?.toolTimeout ?? null,
-      toolApi: event.toolApi || existingTs?.toolApi || '',
       toolParams: resolvedParams || existingTs?.toolParams || null,
       description: event.description || existingTs?.description || '',
       runId: event.runId || existingTs?.runId || rs.runId,

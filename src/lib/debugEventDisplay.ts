@@ -1,4 +1,5 @@
 import type { AgentEvent } from '../context/types';
+import { resolveToolLabel } from './toolDisplay';
 
 export type DebugEventGroup =
   | 'chat'
@@ -53,6 +54,16 @@ export function summarizeEvent(event: AgentEvent): string {
   if (event.type === 'request.query') {
     const message = safeStr(event.message).trim();
     return message || kv;
+  }
+
+  if (String(event.type || '').startsWith('tool.')) {
+    const label = resolveToolLabel({
+      toolLabel: safeStr(event.toolLabel),
+      toolName: safeStr(event.toolName),
+      viewportKey: safeStr(event.viewportKey || event.toolKey),
+      toolId: safeStr(event.toolId),
+    }, '');
+    return [label, kv].filter(Boolean).join(' ').trim();
   }
 
   if (kv) return kv;

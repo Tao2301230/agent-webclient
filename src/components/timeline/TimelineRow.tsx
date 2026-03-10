@@ -10,6 +10,7 @@ import { MaterialIcon } from "../common/MaterialIcon";
 interface TimelineRowProps {
 	node: TimelineNode;
 	showTime?: boolean;
+	metaNode?: React.ReactNode;
 }
 
 const timeFormatter = new Intl.DateTimeFormat("zh-CN", {
@@ -114,13 +115,16 @@ const NodeIcon: React.FC<{ kind: string; role?: string }> = ({
 export const TimelineRow: React.FC<TimelineRowProps> = ({
 	node,
 	showTime = false,
+	metaNode,
 }) => {
 	const time = formatTimelineTime(node.ts);
-	const timeNode = showTime && time.short ? (
-		<div className="timeline-row-time" title={time.full}>
-			{time.short}
-		</div>
-	) : null;
+	const timeNode =
+		metaNode ||
+		(showTime && time.short ? (
+			<div className="timeline-row-time" title={time.full}>
+				{time.short}
+			</div>
+		) : null);
 
 	/* User messages */
 	if (node.kind === "message" && node.role === "user") {

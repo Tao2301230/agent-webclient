@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useAppState, useAppDispatch } from "../../context/AppContext";
 import { ACCESS_TOKEN_STORAGE_KEY } from "../../context/constants";
 import { setAccessToken } from "../../lib/apiClient";
-import { getVoiceRuntime } from "../../lib/voiceRuntime";
+import { DEFAULT_TTS_DEBUG_TEXT, getVoiceRuntime } from "../../lib/voiceRuntime";
 import { UiButton } from "../ui/UiButton";
 import { UiInput } from "../ui/UiInput";
 
@@ -65,6 +65,13 @@ export const SettingsModal: React.FC = () => {
 		document.addEventListener("keydown", onKeyDown);
 		return () => document.removeEventListener("keydown", onKeyDown);
 	}, [dispatch]);
+
+	useEffect(() => {
+		if (!state.settingsOpen) return;
+		setTtsDebugText((current) =>
+			current.trim() ? current : DEFAULT_TTS_DEBUG_TEXT,
+		);
+	}, [state.settingsOpen]);
 
 	return (
 		<div
@@ -159,7 +166,7 @@ export const SettingsModal: React.FC = () => {
 						id="tts-debug-input"
 						rows={3}
 						className="settings-textarea"
-						placeholder="输入调试文本，发送并播放..."
+						placeholder={DEFAULT_TTS_DEBUG_TEXT}
 						value={ttsDebugText}
 						onChange={(e) => setTtsDebugText(e.target.value)}
 					/>

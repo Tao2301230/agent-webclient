@@ -30,6 +30,14 @@ function resolveActionArgsFromEvent(event: AgentEvent): Record<string, unknown> 
   return null;
 }
 
+export function shouldSkipHistoricalActionBatch(params: {
+  eventCursor: number;
+  eventsLength: number;
+  streaming: boolean;
+}): boolean {
+  return !params.streaming && params.eventCursor === 0 && params.eventsLength > 0;
+}
+
 /**
  * Hook to initialize the ActionRuntime (for things like launch_fireworks, switch_theme, show_modal)
  * and listen to the event stream for `action.start` events to automatically execute them.
@@ -98,17 +106,31 @@ export function useActionRuntime() {
       executedActionIdsRef.current.clear();
     }
 
+    if (shouldSkipHistoricalActionBatch({
+      eventCursor: eventCursorRef.current,
+      eventsLength: events.length,
+      streaming: state.streaming,
+    })) {
+      dispatch({
+        type: 'APPEND_DEBUG',
+        line: `[ActionRuntime] Skip ${events.length} historical action events during chat hydration`,
+      });
+      eventCursorRef.current = events.length;
+      actionBuffersRef.current.clear();
+      executedActionIdsRef.current.clear();
+      return;
+    }
+
     const tryExecute = (actionId: string, actionName: string, args: Record<string, unknown>) => {
       if (!actionId || executedActionIdsRef.current.has(actionId)) {
         return;
       }
       executedActionIdsRef.current.add(actionId);
 
-      // History replay also hydrates state.events; do not re-trigger fireworks there.
-      if (actionName === 'launch_fireworks' && !state.streaming) {
+      if (!state.streaming) {
         dispatch({
           type: 'APPEND_DEBUG',
-          line: `[ActionRuntime] Skip launch_fireworks during non-streaming phase (likely history replay), actionId=${actionId}`,
+          line: `[ActionRuntime] Skip historical action ${actionName || 'unknown'} during non-streaming phase, actionId=${actionId}`,
         });
         return;
       }
@@ -190,5 +212,5 @@ export function useActionRuntime() {
     }
 
     eventCursorRef.current = events.length;
-  }, [state.events, dispatch]);
+  }, [state.events, state.streaming, dispatch]);
 }

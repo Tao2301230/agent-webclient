@@ -153,36 +153,38 @@ export const ConversationStage: React.FC = () => {
 											node={item.node}
 											metaNode={
 												<div className="timeline-meta-row">
-													<UiButton
-														className="timeline-meta-btn"
-														variant="ghost"
-														size="sm"
-														iconOnly
-														title={queryCopyStatus}
-														aria-label={queryCopyStatus}
-														onClick={() =>
-															handleCopy(
-																queryCopyKey,
-																item.node.text || "",
-															)
-														}
-													>
-														<MaterialIcon name="content_copy" />
-													</UiButton>
-													<UiButton
-														className="timeline-meta-btn"
-														variant="ghost"
-														size="sm"
-														iconOnly
-														disabled={state.streaming}
-														title="重问"
-														aria-label="重问"
-														onClick={() =>
-															handleResend(item.node.text || "")
-														}
-													>
-														<MaterialIcon name="refresh" />
-													</UiButton>
+													<div className="timeline-meta-actions">
+														<UiButton
+															className="timeline-meta-btn"
+															variant="ghost"
+															size="sm"
+															iconOnly
+															title={queryCopyStatus}
+															aria-label={queryCopyStatus}
+															onClick={() =>
+																handleCopy(
+																	queryCopyKey,
+																	item.node.text || "",
+																)
+															}
+														>
+															<MaterialIcon name="content_copy" />
+														</UiButton>
+														<UiButton
+															className="timeline-meta-btn"
+															variant="ghost"
+															size="sm"
+															iconOnly
+															disabled={state.streaming}
+															title="重问"
+															aria-label="重问"
+															onClick={() =>
+																handleResend(item.node.text || "")
+															}
+														>
+															<MaterialIcon name="refresh" />
+														</UiButton>
+													</div>
 													{queryTime.short && (
 														<div
 															className="timeline-row-time"
@@ -222,42 +224,44 @@ export const ConversationStage: React.FC = () => {
 											</div>
 											{isCompleted && (
 												<div className="timeline-run-meta">
-													<UiButton
-														className="timeline-meta-btn"
-														variant="ghost"
-														size="sm"
-														iconOnly
-														title={runCopyStatus}
-														aria-label={runCopyStatus}
-														onClick={() =>
-															handleCopy(
-																runCopyKey,
-																serializeRunTranscript(
-																	item.queryNode,
-																	item.nodes,
-																),
-															)
-														}
-													>
-														<MaterialIcon name="content_copy" />
-													</UiButton>
-													<UiButton
-														className={`timeline-meta-btn ${isDownvoted ? "is-downvoted" : ""}`}
-														variant="ghost"
-														size="sm"
-														iconOnly
-														active={isDownvoted}
-														title={isDownvoted ? "取消点踩" : "点踩"}
-														aria-label={isDownvoted ? "取消点踩" : "点踩"}
-														onClick={() =>
-															dispatch({
-																type: "TOGGLE_RUN_DOWNVOTE",
-																runKey: item.key,
-															})
-														}
-													>
-														<MaterialIcon name="thumb_down" />
-													</UiButton>
+													<div className="timeline-meta-actions">
+														<UiButton
+															className="timeline-meta-btn"
+															variant="ghost"
+															size="sm"
+															iconOnly
+															title={runCopyStatus}
+															aria-label={runCopyStatus}
+															onClick={() =>
+																handleCopy(
+																	runCopyKey,
+																	serializeRunTranscript(
+																		item.queryNode,
+																		item.nodes,
+																	),
+																)
+															}
+														>
+															<MaterialIcon name="content_copy" />
+														</UiButton>
+														<UiButton
+															className={`timeline-meta-btn ${isDownvoted ? "is-downvoted" : ""}`}
+															variant="ghost"
+															size="sm"
+															iconOnly
+															active={isDownvoted}
+															title={isDownvoted ? "取消点踩" : "点踩"}
+															aria-label={isDownvoted ? "取消点踩" : "点踩"}
+															onClick={() =>
+																dispatch({
+																	type: "TOGGLE_RUN_DOWNVOTE",
+																	runKey: item.key,
+																})
+															}
+														>
+															<MaterialIcon name="thumb_down" />
+														</UiButton>
+													</div>
 													{time.short && (
 														<div
 															className="timeline-run-time"

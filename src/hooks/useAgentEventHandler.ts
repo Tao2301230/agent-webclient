@@ -609,7 +609,7 @@ export function useAgentEventHandler() {
         return;
       }
 
-      if (type === 'plan.task.end') {
+      if (type === 'plan.task.end' || type === 'plan.task.complete') {
         const taskId = event.taskId || '';
         if (taskId) {
           dispatch({

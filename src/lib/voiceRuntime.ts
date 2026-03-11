@@ -4,6 +4,7 @@ import { parseContentSegments } from './contentSegments';
 const VOICE_WS_PATH = '/api/ap/ws/voice';
 const DEFAULT_SAMPLE_RATE = 24000;
 const DEFAULT_CHANNELS = 1;
+export const DEFAULT_TTS_DEBUG_TEXT = '这是一条 TTS 调试语音。如果你能听到这句话，说明当前语音播放链路正常。';
 
 interface VoiceSession {
   key: string;
@@ -25,6 +26,13 @@ interface RuntimeOptions {
   onDebugStatus?: (status: string) => void;
 }
 
+interface DebugTtsRequestState {
+  requestId: string;
+  audioFrames: number;
+  audioBytes: number;
+  started: boolean;
+}
+
 class VoiceRuntime {
   private sessionsByKey = new Map<string, VoiceSession>();
   private sessionKeyByRequestId = new Map<string, string>();
@@ -37,6 +45,7 @@ class VoiceRuntime {
   private activeAudioRequestId = '';
   private activeSampleRate = DEFAULT_SAMPLE_RATE;
   private activeChannels = DEFAULT_CHANNELS;
+  private debugTtsRequest: DebugTtsRequestState | null = null;
   private options: RuntimeOptions;
 
   constructor(options: RuntimeOptions) {
@@ -49,6 +58,18 @@ class VoiceRuntime {
 
   private setDebugStatus(status: string): void {
     this.options.onDebugStatus?.(String(status || '').trim() || 'idle');
+  }
+
+  private setDebugStatusWithStats(status: string): void {
+    const stats = this.debugTtsRequest;
+    if (!stats || !stats.requestId) {
+      this.setDebugStatus(status);
+      return;
+    }
+    const suffix = stats.audioFrames > 0
+      ? ` (${stats.audioFrames} frames, ${stats.audioBytes} bytes)`
+      : '';
+    this.setDebugStatus(`${status}${suffix}`);
   }
 
   private getAccessToken(): string {
@@ -99,6 +120,24 @@ class VoiceRuntime {
     }
   }
 
+  private async prepareAudioPlayback(): Promise<AudioContext> {
+    const context = this.ensureAudioContext();
+    if (!context) {
+      throw new Error('browser audio context unavailable');
+    }
+    if (context.state === 'suspended' && typeof context.resume === 'function') {
+      try {
+        await context.resume();
+      } catch (error) {
+        throw new Error(`audio resume failed: ${(error as Error).message}`);
+      }
+    }
+    if (context.state === 'suspended') {
+      throw new Error('audio context is still suspended');
+    }
+    return context;
+  }
+
   private resetPlayback(): void {
     this.playbackCursor = 0;
     if (!this.audioContext) return;
@@ -112,24 +151,26 @@ class VoiceRuntime {
     }
   }
 
-  private playPcm(bufferLike: ArrayBuffer | ArrayBufferView): void {
+  private playPcm(bufferLike: ArrayBuffer | ArrayBufferView): boolean {
     const context = this.ensureAudioContext();
-    if (!context) return;
-
-    if (context.state === 'suspended' && typeof context.resume === 'function') {
-      Promise.resolve(context.resume()).catch(() => undefined);
+    if (!context) {
+      this.setDebugStatus('error: browser audio context unavailable');
+      return false;
     }
-
+    if (context.state === 'suspended') {
+      this.setDebugStatus('error: audio context is suspended');
+      return false;
+    }
     const bytes = this.isArrayBufferView(bufferLike)
       ? new Uint8Array(bufferLike.buffer, bufferLike.byteOffset, bufferLike.byteLength)
       : new Uint8Array(bufferLike);
     const sampleRate = Math.max(8000, Number(this.activeSampleRate) || DEFAULT_SAMPLE_RATE);
     const channels = Math.max(1, Number(this.activeChannels) || DEFAULT_CHANNELS);
-    if (bytes.length < 2) return;
+    if (bytes.length < 2) return false;
 
     const sampleCount = Math.floor(bytes.length / 2);
     const frameCount = Math.floor(sampleCount / channels);
-    if (frameCount <= 0) return;
+    if (frameCount <= 0) return false;
 
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     const audioBuffer = context.createBuffer(channels, frameCount, sampleRate);
@@ -153,18 +194,36 @@ class VoiceRuntime {
     if (this.activeAudioRequestId) {
       this.updateBlockByRequestId(this.activeAudioRequestId, { status: 'playing', error: '' });
     }
+    if (this.debugTtsRequest?.requestId === this.activeAudioRequestId) {
+      this.setDebugStatusWithStats('playing');
+    }
+    return true;
   }
 
   private handleSocketBinary(data: unknown): void {
     if (typeof Blob !== 'undefined' && data instanceof Blob) {
       data.arrayBuffer()
-        .then((buffer) => this.playPcm(buffer))
+        .then((buffer) => {
+          this.handleAudioBytes(buffer.byteLength);
+          this.playPcm(buffer);
+        })
         .catch((error) => this.appendDebug(`voice blob decode failed: ${(error as Error).message}`));
       return;
     }
     if (data instanceof ArrayBuffer || this.isArrayBufferView(data)) {
+      const byteLength = data instanceof ArrayBuffer ? data.byteLength : data.byteLength;
+      this.handleAudioBytes(byteLength);
       this.playPcm(data);
     }
+  }
+
+  private handleAudioBytes(byteLength: number): void {
+    if (!this.activeAudioRequestId || !this.debugTtsRequest || this.debugTtsRequest.requestId !== this.activeAudioRequestId) {
+      return;
+    }
+    this.debugTtsRequest.audioFrames += 1;
+    this.debugTtsRequest.audioBytes += Math.max(0, Number(byteLength) || 0);
+    this.setDebugStatusWithStats('receiving audio');
   }
 
   private updateBlock(contentId: string, signature: string, patch: Partial<TtsVoiceBlock>): void {
@@ -196,13 +255,16 @@ class VoiceRuntime {
         this.activeAudioRequestId = requestId;
         this.activeSampleRate = Number(payload.sampleRate) || DEFAULT_SAMPLE_RATE;
         this.activeChannels = Number(payload.channels) || DEFAULT_CHANNELS;
+        if (this.debugTtsRequest?.requestId === requestId) {
+          this.debugTtsRequest.started = true;
+          this.setDebugStatusWithStats('tts started');
+        }
         this.updateBlockByRequestId(requestId, {
           status: 'playing',
           error: '',
           sampleRate: this.activeSampleRate,
           channels: this.activeChannels,
         });
-        if (requestId.startsWith('debug_')) this.setDebugStatus('playing');
       }
       return;
     }
@@ -210,7 +272,15 @@ class VoiceRuntime {
     if (type === 'tts.done') {
       if (requestId) {
         this.updateBlockByRequestId(requestId, { status: 'done', error: '' });
-        if (requestId.startsWith('debug_')) this.setDebugStatus('done');
+        if (this.debugTtsRequest?.requestId === requestId) {
+          if (this.debugTtsRequest.audioFrames > 0) {
+            this.setDebugStatusWithStats('done');
+          } else if (this.debugTtsRequest.started) {
+            this.setDebugStatus('connected but no audio frames');
+          } else {
+            this.setDebugStatus('done');
+          }
+        }
       }
       return;
     }
@@ -218,7 +288,7 @@ class VoiceRuntime {
     if (type === 'tts.interrupted') {
       if (requestId) {
         this.updateBlockByRequestId(requestId, { status: 'stopped' });
-        if (requestId.startsWith('debug_')) this.setDebugStatus('stopped');
+        if (this.debugTtsRequest?.requestId === requestId) this.setDebugStatus('stopped');
       }
       return;
     }
@@ -227,7 +297,7 @@ class VoiceRuntime {
       const message = String(payload?.message || 'voice websocket error');
       if (requestId) {
         this.updateBlockByRequestId(requestId, { status: 'error', error: message });
-        if (requestId.startsWith('debug_')) this.setDebugStatus(`error: ${message}`);
+        if (this.debugTtsRequest?.requestId === requestId) this.setDebugStatus(`error: ${message}`);
       } else {
         for (const session of this.sessionsByKey.values()) {
           if (!session.committed) {
@@ -311,6 +381,9 @@ class VoiceRuntime {
         settled = true;
         connected = true;
         this.socketConnectingPromise = null;
+        if (this.debugTtsRequest?.requestId) {
+          this.setDebugStatus('socket open');
+        }
         this.flushOutboundQueue();
         resolve(this.socket as WebSocket);
       });
@@ -537,6 +610,7 @@ class VoiceRuntime {
     this.sessionsByKey.clear();
     this.sessionKeyByRequestId.clear();
     this.outboundQueue.length = 0;
+    this.debugTtsRequest = null;
     this.activeAudioRequestId = '';
     this.activeSampleRate = DEFAULT_SAMPLE_RATE;
     this.activeChannels = DEFAULT_CHANNELS;
@@ -548,9 +622,29 @@ class VoiceRuntime {
   async debugSpeakTtsVoice(rawText: string): Promise<string> {
     const text = String(rawText || '').trim();
     if (!text) throw new Error('debug text is empty');
-    await this.ensureSocket();
+    const accessToken = this.getAccessToken();
+    if (!accessToken) {
+      const errorMessage = 'voice access_token is required';
+      this.setDebugStatus(`error: ${errorMessage}`);
+      throw new Error(errorMessage);
+    }
     const requestId = `debug_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    this.debugTtsRequest = {
+      requestId,
+      audioFrames: 0,
+      audioBytes: 0,
+      started: false,
+    };
     this.setDebugStatus('connecting');
+    try {
+      await this.prepareAudioPlayback();
+    } catch (error) {
+      const message = (error as Error).message;
+      this.setDebugStatus(`error: ${message}`);
+      throw error;
+    }
+    await this.ensureSocket();
+    this.setDebugStatus('socket open');
     this.sendJsonFrame({
       type: 'tts.start',
       requestId,

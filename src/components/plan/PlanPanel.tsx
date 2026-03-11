@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { useAppState, useAppDispatch } from "../../context/AppContext";
+import type { Plan, PlanRuntime } from "../../context/types";
 import { MaterialIcon } from "../common/MaterialIcon";
 import { UiButton } from "../ui/UiButton";
 import { UiTag } from "../ui/UiTag";
@@ -13,6 +14,74 @@ function normalizePlanStatus(status?: string): string {
 	return "pending";
 }
 
+export interface PlanSummaryView {
+	normalizedTasks: Array<{
+		taskId: string;
+		description?: string;
+		status: string;
+	}>;
+	totalTasks: number;
+	currentCount: number;
+	progressText: string;
+	statusText: string;
+	statusTone: "default" | "accent" | "muted" | "danger";
+	titleText: string;
+}
+
+export function buildPlanSummaryView(
+	plan: Plan | null,
+	planRuntimeByTaskId: Map<string, PlanRuntime>,
+): PlanSummaryView {
+	const tasks = plan?.plan || [];
+	const normalizedTasks = tasks.map((task) => {
+		const runtime = planRuntimeByTaskId.get(task.taskId);
+		return {
+			taskId: task.taskId,
+			description: task.description,
+			status: normalizePlanStatus(runtime?.status || task.status),
+		};
+	});
+	const totalTasks = normalizedTasks.length;
+	const currentCount = normalizedTasks.reduce((maxIndex, task, index) => {
+		return task.status === "pending" ? maxIndex : index + 1;
+	}, 0);
+	const completedTasks = normalizedTasks.filter(
+		(task) => task.status === "completed",
+	).length;
+	const hasFailed = normalizedTasks.some((task) => task.status === "failed");
+	const hasRunning = normalizedTasks.some((task) => task.status === "running");
+	const hasCanceled = normalizedTasks.some((task) => task.status === "canceled");
+
+	let statusText = "待开始";
+	let statusTone: PlanSummaryView["statusTone"] = "muted";
+	if (totalTasks > 0 && completedTasks === totalTasks) {
+		statusText = "已完成";
+		statusTone = "accent";
+	} else if (hasFailed) {
+		statusText = "失败";
+		statusTone = "danger";
+	} else if (hasRunning) {
+		statusText = "进行中";
+		statusTone = "accent";
+	} else if (hasCanceled) {
+		statusText = "已取消";
+		statusTone = "default";
+	} else if (currentCount > 0) {
+		statusText = "进行中";
+		statusTone = "accent";
+	}
+
+	return {
+		normalizedTasks,
+		totalTasks,
+		currentCount,
+		progressText: `${currentCount}/${totalTasks}`,
+		statusText,
+		statusTone,
+		titleText: "PLAN",
+	};
+}
+
 export const PlanPanel: React.FC = () => {
 	const state = useAppState();
 	const dispatch = useAppDispatch();
@@ -20,39 +89,10 @@ export const PlanPanel: React.FC = () => {
 	if (!state.plan) return null;
 
 	const planListId = `floating-plan-list-${String(state.plan.planId || "plan").replace(/[^a-zA-Z0-9_-]/g, "-")}`;
-	const tasks = state.plan.plan || [];
-	const normalizedTasks = useMemo(() => {
-		return tasks.map((task) => {
-			const runtime = state.planRuntimeByTaskId.get(task.taskId);
-			return {
-				...task,
-				status: normalizePlanStatus(runtime?.status || task.status),
-			};
-		});
-	}, [state.planRuntimeByTaskId, tasks]);
-	const totalTasks = normalizedTasks.length;
-	const completedTasks = normalizedTasks.filter(
-		(task) => task.status === "completed",
-	).length;
-	const runningTask =
-		normalizedTasks.find((task) => task.taskId === state.planCurrentRunningTaskId) ||
-		normalizedTasks.find((task) => task.status === "running");
-	const lastTouchedTask = normalizedTasks.find(
-		(task) => task.taskId === state.planLastTouchedTaskId,
+	const summary = useMemo(
+		() => buildPlanSummaryView(state.plan, state.planRuntimeByTaskId),
+		[state.plan, state.planRuntimeByTaskId],
 	);
-	const focusTask =
-		runningTask ||
-		lastTouchedTask ||
-		normalizedTasks.find((task) => task.status === "failed") ||
-		normalizedTasks.find((task) => task.status === "pending") ||
-		normalizedTasks[normalizedTasks.length - 1];
-	const summaryText = focusTask?.description || "No active plan";
-	const summaryCount = `${Math.min(
-		totalTasks,
-		runningTask
-			? normalizedTasks.findIndex((task) => task.taskId === runningTask.taskId) + 1
-			: completedTasks || (totalTasks > 0 ? 1 : 0),
-	)}/${totalTasks}`;
 
 	return (
 		<div className={`floating-plan ${state.planExpanded ? "is-expanded" : ""}`} id="floating-plan">
@@ -77,13 +117,16 @@ export const PlanPanel: React.FC = () => {
 					});
 				}}
 			>
+				<span className="plan-title">{summary.titleText}</span>
 				<UiTag className="plan-summary-status" tone="accent">
-					PLAN {summaryCount}
+					{summary.progressText}
 				</UiTag>
-				<span className="plan-summary-text">{summaryText}</span>
-				<UiTag className="plan-id-label" tone="muted">
-					{state.plan.planId}
+				<UiTag className="plan-overall-status" tone={summary.statusTone}>
+					{summary.statusText}
 				</UiTag>
+				<span className="plan-summary-text">
+					{summary.totalTasks > 0 ? `${summary.totalTasks} 个任务` : "No tasks"}
+				</span>
 				<span className="plan-chevron" aria-hidden="true">
 					<MaterialIcon
 						name={state.planExpanded ? "keyboard_arrow_down" : "keyboard_arrow_up"}
@@ -92,7 +135,7 @@ export const PlanPanel: React.FC = () => {
 			</UiButton>
 
 			<ul className="plan-list" id={planListId}>
-				{normalizedTasks.map((task) => {
+				{summary.normalizedTasks.map((task) => {
 					return (
 						<li key={task.taskId} className="plan-item" data-status={task.status}>
 							<span className="plan-badge" />

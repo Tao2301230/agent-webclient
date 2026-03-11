@@ -402,7 +402,7 @@ export function replayEvent(rs: ReplayState, event: AgentEvent): void {
     return;
   }
 
-  if (type === 'plan.task.end') {
+  if (type === 'plan.task.end' || type === 'plan.task.complete') {
     const taskId = event.taskId || '';
     if (taskId) {
       rs.planRuntimeByTaskId.set(taskId, {

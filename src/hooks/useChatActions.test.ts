@@ -57,4 +57,28 @@ describe('replayEvent tool migration', () => {
 
     expect(node?.toolName).toBe('email.list_accounts');
   });
+
+  it('marks plan tasks completed for plan.task.complete compatibility', () => {
+    const state = createReplayState();
+
+    replayEvent(state, {
+      type: 'plan.update',
+      planId: 'plan_1',
+      plan: [
+        { taskId: 'task_1', description: 'step 1' },
+        { taskId: 'task_2', description: 'step 2' },
+      ],
+    });
+    replayEvent(state, {
+      type: 'plan.task.start',
+      taskId: 'task_1',
+    });
+    replayEvent(state, {
+      type: 'plan.task.complete',
+      taskId: 'task_1',
+    });
+
+    expect(state.planRuntimeByTaskId.get('task_1')?.status).toBe('completed');
+    expect(state.planCurrentRunningTaskId).toBe('');
+  });
 });

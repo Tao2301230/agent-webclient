@@ -783,18 +783,26 @@ textarea {
 .timeline-run-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  gap: 12px;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .timeline-run-meta {
   margin-left: 24px;
 }
 
+.timeline-meta-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
 .timeline-meta-btn {
   min-height: 22px !important;
   min-width: 22px !important;
-  padding: 0 8px !important;
+  padding: 0 6px !important;
   border-radius: 999px !important;
   color: var(--ink-muted);
 }
@@ -813,6 +821,13 @@ textarea {
 .timeline-meta-btn.is-active {
   color: color-mix(in srgb, var(--accent-danger) 78%, var(--ink-1));
   background: color-mix(in srgb, var(--accent-danger) 12%, transparent);
+}
+
+.timeline-row-time,
+.timeline-run-time {
+  margin-left: auto;
+  padding-left: 8px;
+  flex: 0 0 auto;
 }
 
 .timeline-text {
@@ -1570,7 +1585,7 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 10px;
+  gap: 8px;
   text-align: left;
   box-shadow: var(--shadow-soft);
   backdrop-filter: blur(10px);
@@ -1584,6 +1599,14 @@ textarea {
   box-shadow: var(--shadow-medium);
 }
 
+.plan-title {
+  flex: 0 0 auto;
+  font: 700 12px/1 'IBM Plex Mono', monospace;
+  color: var(--ink-1);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .plan-summary-status {
   font: 700 11px/1 'IBM Plex Mono', monospace;
   color: var(--accent-electric-strong);
@@ -1591,8 +1614,13 @@ textarea {
   flex: 0 0 auto;
 }
 
+.plan-overall-status {
+  flex: 0 0 auto;
+}
+
 .plan-summary-text {
   flex: 1;
+  min-width: 0;
   font-size: 12px;
   color: var(--ink-2);
   white-space: nowrap;
@@ -1600,18 +1628,13 @@ textarea {
   text-overflow: ellipsis;
 }
 
-.plan-id-label {
-  font-size: 10px;
-  font-family: 'IBM Plex Mono', monospace;
-  color: var(--ink-muted);
-  flex: 0 0 auto;
-}
-
 .plan-chevron {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--ink-muted);
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .plan-chevron .material-symbols-rounded {
@@ -1619,22 +1642,18 @@ textarea {
 }
 
 .plan-list {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: calc(100% + 8px);
-  z-index: 6;
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0 8px;
   max-height: 0;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--line-soft) 90%, transparent);
-  border-radius: 14px;
+  border: 0 solid transparent;
+  border-top-width: 0;
+  border-radius: 0 0 14px 14px;
   background: color-mix(in srgb, var(--bg-elev-2) 98%, transparent);
-  box-shadow: var(--shadow-medium);
-  opacity: 0;
-  transform: translateY(6px);
+  box-shadow: none;
+  opacity: 1;
+  transform: none;
   pointer-events: none;
   transition: max-height 0.24s ease, padding 0.24s ease, opacity 0.18s ease, transform 0.18s ease;
 }
@@ -1643,8 +1662,9 @@ textarea {
   max-height: min(320px, calc(100dvh - 220px));
   overflow: auto;
   padding: 8px;
-  opacity: 1;
-  transform: translateY(0);
+  margin-top: 6px;
+  border: 1px solid color-mix(in srgb, var(--line-soft) 90%, transparent);
+  box-shadow: var(--shadow-medium);
   pointer-events: auto;
 }
 

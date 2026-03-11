@@ -44,6 +44,55 @@ class MockWebSocket {
   }
 }
 
+class MockAudioBuffer {
+  duration: number;
+  private channels: Float32Array[];
+
+  constructor(channelCount: number, frameCount: number, sampleRate: number) {
+    this.duration = frameCount / sampleRate;
+    this.channels = Array.from({ length: channelCount }, () => new Float32Array(frameCount));
+  }
+
+  getChannelData(index: number) {
+    return this.channels[index];
+  }
+}
+
+class MockAudioBufferSource {
+  buffer: MockAudioBuffer | null = null;
+
+  connect() {
+    return undefined;
+  }
+
+  start() {
+    return undefined;
+  }
+}
+
+class MockAudioContext {
+  state: AudioContextState = 'running';
+  currentTime = 0;
+  destination = {};
+
+  resume() {
+    this.state = 'running';
+    return Promise.resolve();
+  }
+
+  close() {
+    return Promise.resolve();
+  }
+
+  createBuffer(channels: number, frameCount: number, sampleRate: number) {
+    return new MockAudioBuffer(channels, frameCount, sampleRate) as unknown as AudioBuffer;
+  }
+
+  createBufferSource() {
+    return new MockAudioBufferSource() as unknown as AudioBufferSourceNode;
+  }
+}
+
 describe('voiceRuntime debug status', () => {
   const originalWindow = globalThis.window;
   const originalWebSocket = globalThis.WebSocket;
@@ -86,6 +135,7 @@ describe('voiceRuntime debug status', () => {
     (globalThis as unknown as { window?: Window & typeof globalThis }).window = {
       location: { protocol: 'http:', host: 'localhost:3000' },
       WebSocket: MockWebSocket as unknown as typeof WebSocket,
+      AudioContext: MockAudioContext as unknown as typeof AudioContext,
     } as Window & typeof globalThis;
     (globalThis as unknown as { WebSocket?: typeof WebSocket }).WebSocket =
       MockWebSocket as unknown as typeof WebSocket;
@@ -98,7 +148,7 @@ describe('voiceRuntime debug status', () => {
     });
 
     const requestId = await runtime.debugSpeakTtsVoice('hello world');
-    expect(statuses[statuses.length - 1]).toBe('connecting');
+    expect(statuses[statuses.length - 1]).toBe('socket open');
 
     const socket = MockWebSocket.instances[0];
     socket.emit('message', {
@@ -109,7 +159,12 @@ describe('voiceRuntime debug status', () => {
         channels: 1,
       }),
     });
-    expect(statuses[statuses.length - 1]).toBe('playing');
+    expect(statuses[statuses.length - 1]).toBe('tts started');
+
+    socket.emit('message', {
+      data: new Uint8Array([0, 0, 0, 0]).buffer,
+    });
+    expect(statuses[statuses.length - 1]).toBe('playing (1 frames, 4 bytes)');
 
     socket.emit('message', {
       data: JSON.stringify({
@@ -117,9 +172,46 @@ describe('voiceRuntime debug status', () => {
         requestId,
       }),
     });
-    expect(statuses[statuses.length - 1]).toBe('done');
+    expect(statuses[statuses.length - 1]).toBe('done (1 frames, 4 bytes)');
 
     runtime.stopAllVoiceSessions('debug_stop', { mode: 'stop' });
     expect(statuses[statuses.length - 1]).toBe('stopped');
+  });
+
+  it('marks debug sessions with no audio payload as connected but no audio frames', async () => {
+    const statuses: string[] = [];
+    (globalThis as unknown as { window?: Window & typeof globalThis }).window = {
+      location: { protocol: 'http:', host: 'localhost:3000' },
+      WebSocket: MockWebSocket as unknown as typeof WebSocket,
+      AudioContext: MockAudioContext as unknown as typeof AudioContext,
+    } as Window & typeof globalThis;
+    (globalThis as unknown as { WebSocket?: typeof WebSocket }).WebSocket =
+      MockWebSocket as unknown as typeof WebSocket;
+
+    const runtime = initVoiceRuntime({
+      getState: () => ({ accessToken: 'token_abc', chatId: 'chat_1' } as AppState),
+      onPatchBlock: () => undefined,
+      onRemoveInactiveBlocks: () => undefined,
+      onDebugStatus: (status) => statuses.push(status),
+    });
+
+    const requestId = await runtime.debugSpeakTtsVoice('hello world');
+    const socket = MockWebSocket.instances[0];
+    socket.emit('message', {
+      data: JSON.stringify({
+        type: 'tts.started',
+        requestId,
+        sampleRate: 24000,
+        channels: 1,
+      }),
+    });
+    socket.emit('message', {
+      data: JSON.stringify({
+        type: 'tts.done',
+        requestId,
+      }),
+    });
+
+    expect(statuses[statuses.length - 1]).toBe('connected but no audio frames');
   });
 });

@@ -4,6 +4,7 @@ import { parseContentSegments } from './contentSegments';
 const VOICE_WS_PATH = '/api/ap/ws/voice';
 const DEFAULT_SAMPLE_RATE = 24000;
 const DEFAULT_CHANNELS = 1;
+const VOICE_WS_CONNECT_TIMEOUT_MS = 8000;
 export const DEFAULT_TTS_DEBUG_TEXT = '这是一条 TTS 调试语音。如果你能听到这句话，说明当前语音播放链路正常。';
 
 interface VoiceSession {
@@ -84,6 +85,12 @@ class VoiceRuntime {
     const url = new URL(VOICE_WS_PATH, base);
     url.searchParams.set('access_token', accessToken);
     return url.toString();
+  }
+
+  private describeVoiceWsTarget(accessToken: string): string {
+    const url = new URL(this.getVoiceWsUrl(accessToken));
+    url.search = '';
+    return `${url.origin}${url.pathname}`;
   }
 
   private sessionKeyOf(contentId: string, signature: string): string {
@@ -352,14 +359,29 @@ class VoiceRuntime {
     this.socketConnectingPromise = new Promise((resolve, reject) => {
       let connected = false;
       let settled = false;
+      const targetSummary = this.describeVoiceWsTarget(accessToken);
+      const connectTimeout = globalThis.window?.setTimeout
+        ? globalThis.window.setTimeout(() => {
+          this.appendDebug(`voice ws connect timeout: ${targetSummary}`);
+          failPendingConnect('voice websocket connect timeout');
+        }, VOICE_WS_CONNECT_TIMEOUT_MS)
+        : null;
+
+      const clearConnectTimeout = (): void => {
+        if (connectTimeout !== null && globalThis.window?.clearTimeout) {
+          globalThis.window.clearTimeout(connectTimeout);
+        }
+      };
 
       const failPendingConnect = (message: string): void => {
         if (settled) return;
         settled = true;
+        clearConnectTimeout();
         this.socketConnectingPromise = null;
         const failedSocket = this.socket;
         this.socket = null;
         this.markUncommittedSessionsError(message);
+        this.setDebugStatus(`error: ${message}`);
         reject(new Error(message));
         if (failedSocket && failedSocket.readyState === failedSocket.CONNECTING) {
           this.socketClosingExpected = true;
@@ -368,8 +390,10 @@ class VoiceRuntime {
       };
 
       try {
+        this.appendDebug(`voice ws connect -> ${targetSummary}`);
         this.socket = new WsCtor(this.getVoiceWsUrl(accessToken));
       } catch (error) {
+        clearConnectTimeout();
         this.socketConnectingPromise = null;
         reject(error as Error);
         return;
@@ -380,6 +404,7 @@ class VoiceRuntime {
         if (settled) return;
         settled = true;
         connected = true;
+        clearConnectTimeout();
         this.socketConnectingPromise = null;
         if (this.debugTtsRequest?.requestId) {
           this.setDebugStatus('socket open');
@@ -416,6 +441,7 @@ class VoiceRuntime {
         }
         this.socketConnectingPromise = null;
         this.socket = null;
+        clearConnectTimeout();
         if (!expected) {
           this.markUncommittedSessionsError('voice websocket closed');
           this.setDebugStatus('error: voice websocket closed');

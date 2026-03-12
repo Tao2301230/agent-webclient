@@ -44,6 +44,35 @@ class MockWebSocket {
   }
 }
 
+class HangingWebSocket {
+  static instances: HangingWebSocket[] = [];
+  static CONNECTING = 0;
+  static OPEN = 1;
+
+  CONNECTING = 0;
+  OPEN = 1;
+  readyState = HangingWebSocket.CONNECTING;
+  binaryType = 'arraybuffer';
+  url: string;
+
+  constructor(url: string) {
+    this.url = url;
+    HangingWebSocket.instances.push(this);
+  }
+
+  addEventListener() {
+    return undefined;
+  }
+
+  send() {
+    return undefined;
+  }
+
+  close() {
+    this.readyState = 3;
+  }
+}
+
 class MockAudioBuffer {
   duration: number;
   private channels: Float32Array[];
@@ -99,6 +128,8 @@ describe('voiceRuntime debug status', () => {
 
   afterEach(() => {
     MockWebSocket.instances = [];
+    HangingWebSocket.instances = [];
+    jest.useRealTimers();
     if (originalWindow) {
       (globalThis as unknown as { window?: Window & typeof globalThis }).window = originalWindow;
     } else {
@@ -213,5 +244,34 @@ describe('voiceRuntime debug status', () => {
     });
 
     expect(statuses[statuses.length - 1]).toBe('connected but no audio frames');
+  });
+
+  it('times out pending websocket handshakes instead of waiting forever', async () => {
+    jest.useFakeTimers();
+
+    const statuses: string[] = [];
+    (globalThis as unknown as { window?: Window & typeof globalThis }).window = {
+      location: { protocol: 'http:', host: 'localhost:3000' },
+      WebSocket: HangingWebSocket as unknown as typeof WebSocket,
+      AudioContext: MockAudioContext as unknown as typeof AudioContext,
+      setTimeout,
+      clearTimeout,
+    } as Window & typeof globalThis;
+    (globalThis as unknown as { WebSocket?: typeof WebSocket }).WebSocket =
+      HangingWebSocket as unknown as typeof WebSocket;
+
+    const runtime = initVoiceRuntime({
+      getState: () => ({ accessToken: 'token_abc', chatId: 'chat_1' } as AppState),
+      onPatchBlock: () => undefined,
+      onRemoveInactiveBlocks: () => undefined,
+      onDebugStatus: (status) => statuses.push(status),
+    });
+
+    const pending = runtime.debugSpeakTtsVoice('hello world');
+    const assertion = expect(pending).rejects.toThrow('voice websocket connect timeout');
+    await jest.advanceTimersByTimeAsync(8000);
+
+    await assertion;
+    expect(statuses[statuses.length - 1]).toBe('error: voice websocket connect timeout');
   });
 });

@@ -86,9 +86,16 @@ module.exports = (env, argv) => {
       historyApiFallback: true,
       proxy: [
         {
+          context: ['/api/ap/ws/voice'],
+          target: apiTarget,
+          changeOrigin: true,
+          ws: true,
+        },
+        {
           context: ['/api/ap'],
           target: apiTarget,
           changeOrigin: true,
+          ws: false,
           onProxyRes: function (proxyRes, req, res) {
             const header = proxyRes.headers['content-disposition'];
             header && res.setHeader('Content-Disposition', header);

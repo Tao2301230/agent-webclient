@@ -202,13 +202,7 @@ export const LeftSidebar: React.FC = () => {
 					onClick={() => {
 						if (state.conversationMode === "worker") {
 							window.dispatchEvent(
-								new CustomEvent("agent:refresh-agents"),
-							);
-							window.dispatchEvent(
-								new CustomEvent("agent:refresh-teams"),
-							);
-							window.dispatchEvent(
-								new CustomEvent("agent:refresh-chats"),
+								new CustomEvent("agent:refresh-worker-data"),
 							);
 						} else {
 							window.dispatchEvent(

@@ -8,6 +8,89 @@ import { pickToolName, resolveViewportKey } from '../lib/toolEvent';
 import { buildWorkerRows, createWorkerKeyFromChat } from '../lib/workerListFormatter';
 import { buildWorkerConversationRows } from '../lib/workerConversationFormatter';
 
+type WorkerDataSnapshot = {
+  agents: Agent[];
+  teams: Team[];
+  chats: Chat[];
+  workerSelectionKey: string;
+};
+
+type WorkerRefreshOverrides = Partial<WorkerDataSnapshot>;
+
+interface WorkerRefreshCoordinatorOptions {
+  fetchAgents: () => Promise<Agent[]>;
+  fetchTeams: () => Promise<Team[]>;
+  fetchChats: () => Promise<Chat[]>;
+  getSnapshot: () => WorkerDataSnapshot;
+  applyAgents: (agents: Agent[]) => void;
+  applyTeams: (teams: Team[]) => void;
+  applyChats: (chats: Chat[]) => void;
+  rebuildWorkerRows: (overrides: WorkerRefreshOverrides) => void;
+  appendDebug: (line: string) => void;
+}
+
+type SettledListResult<T> = PromiseSettledResult<T[]>;
+
+function settledValueOrFallback<T>(
+  result: SettledListResult<T>,
+  fallback: T[],
+  onRejected: (message: string) => void,
+): T[] {
+  if (result.status === 'fulfilled') {
+    return Array.isArray(result.value) ? result.value : [];
+  }
+  onRejected(result.reason instanceof Error ? result.reason.message : String(result.reason || 'unknown error'));
+  return fallback;
+}
+
+export async function refreshWorkerDataWithCoordinator(
+  options: WorkerRefreshCoordinatorOptions,
+): Promise<void> {
+  const agentsPromise = options.fetchAgents();
+  const teamsPromise = options.fetchTeams();
+  const chatsPromise = options.fetchChats();
+
+  const [agentsResult, teamsResult, chatsResult] = await Promise.allSettled([
+    agentsPromise,
+    teamsPromise,
+    chatsPromise,
+  ]) as [SettledListResult<Agent>, SettledListResult<Team>, SettledListResult<Chat>];
+
+  const current = options.getSnapshot();
+  const nextAgents = settledValueOrFallback(agentsResult, current.agents, (message) => {
+    options.appendDebug(`[loadAgents error] ${message}`);
+  });
+  const nextTeams = settledValueOrFallback(teamsResult, current.teams, (message) => {
+    options.appendDebug(`[loadTeams error] ${message}`);
+  });
+  const nextChats = settledValueOrFallback(chatsResult, current.chats, (message) => {
+    options.appendDebug(`[loadChats error] ${message}`);
+  });
+
+  if (agentsResult.status === 'fulfilled') {
+    options.applyAgents(nextAgents);
+  }
+  if (teamsResult.status === 'fulfilled') {
+    options.applyTeams(nextTeams);
+  }
+  if (chatsResult.status === 'fulfilled') {
+    options.applyChats(nextChats);
+  }
+
+  if (
+    agentsResult.status === 'fulfilled'
+    || teamsResult.status === 'fulfilled'
+    || chatsResult.status === 'fulfilled'
+  ) {
+    options.rebuildWorkerRows({
+      agents: nextAgents,
+      teams: nextTeams,
+      chats: nextChats,
+      workerSelectionKey: current.workerSelectionKey,
+    });
+  }
+}
+
 /**
  * Safely extract a string value from an event field.
  */
@@ -462,7 +545,7 @@ export function useChatActions() {
     return rows[0]?.key || '';
   }, [findDefaultTeamWorkerKey, stateRef]);
 
-  const rebuildWorkerRowsFromState = useCallback((overrides: Partial<{ agents: Agent[]; teams: Team[]; chats: Chat[]; workerSelectionKey: string }> = {}) => {
+  const rebuildWorkerRowsFromState = useCallback((overrides: WorkerRefreshOverrides = {}) => {
     const current = stateRef.current;
     const agents = overrides.agents ?? current.agents;
     const teams = overrides.teams ?? current.teams;
@@ -485,6 +568,13 @@ export function useChatActions() {
     });
     dispatch({ type: 'SET_WORKER_RELATED_CHATS', chats: workerChats });
   }, [dispatch, ensureWorkerSelection, stateRef]);
+
+  const getWorkerDataSnapshot = useCallback((): WorkerDataSnapshot => ({
+    agents: stateRef.current.agents,
+    teams: stateRef.current.teams,
+    chats: stateRef.current.chats,
+    workerSelectionKey: stateRef.current.workerSelectionKey,
+  }), [stateRef]);
 
   const loadAgents = useCallback(async () => {
     try {
@@ -518,6 +608,37 @@ export function useChatActions() {
       dispatch({ type: 'APPEND_DEBUG', line: `[loadChats error] ${(error as Error).message}` });
     }
   }, [dispatch, rebuildWorkerRowsFromState]);
+
+  const refreshWorkerData = useCallback(async () => {
+    await refreshWorkerDataWithCoordinator({
+      fetchAgents: async () => {
+        const response = await getAgents();
+        return (response.data as Agent[]) || [];
+      },
+      fetchTeams: async () => {
+        const response = await getTeams();
+        return (response.data as Team[]) || [];
+      },
+      fetchChats: async () => {
+        const response = await getChats();
+        return (response.data as Chat[]) || [];
+      },
+      getSnapshot: getWorkerDataSnapshot,
+      applyAgents: (agents) => {
+        dispatch({ type: 'SET_AGENTS', agents });
+      },
+      applyTeams: (teams) => {
+        dispatch({ type: 'SET_TEAMS', teams });
+      },
+      applyChats: (chats) => {
+        dispatch({ type: 'SET_CHATS', chats });
+      },
+      rebuildWorkerRows: rebuildWorkerRowsFromState,
+      appendDebug: (line) => {
+        dispatch({ type: 'APPEND_DEBUG', line });
+      },
+    });
+  }, [dispatch, getWorkerDataSnapshot, rebuildWorkerRowsFromState]);
 
   const loadChat = useCallback(
     async (chatId: string) => {
@@ -630,7 +751,7 @@ export function useChatActions() {
     });
   }, [clearPlanAutoCollapseTimer, dispatch, loadChat, stateRef]);
 
-  /* Bootstrap: load agents and chats on mount */
+  /* Bootstrap: load worker data on mount */
   useEffect(() => {
     if (bootstrappedRef.current) {
       return;
@@ -638,9 +759,7 @@ export function useChatActions() {
     bootstrappedRef.current = true;
 
     setAccessToken(stateRef.current.accessToken);
-    loadAgents();
-    loadTeams();
-    loadChats();
+    refreshWorkerData().catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -681,6 +800,15 @@ export function useChatActions() {
     return () => window.removeEventListener('agent:refresh-chats', handler);
   }, [loadChats]);
 
+  /* Refresh worker data with coordinated state application */
+  useEffect(() => {
+    const handler = () => {
+      refreshWorkerData().catch(() => undefined);
+    };
+    window.addEventListener('agent:refresh-worker-data', handler);
+    return () => window.removeEventListener('agent:refresh-worker-data', handler);
+  }, [refreshWorkerData]);
+
   /* Switch conversation mode */
   useEffect(() => {
     const handler = (e: Event) => {
@@ -713,6 +841,7 @@ export function useChatActions() {
     loadAgents,
     loadTeams,
     loadChats,
+    refreshWorkerData,
     loadChat,
     selectWorkerConversation,
   };

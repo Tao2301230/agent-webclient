@@ -19,9 +19,7 @@ export const SettingsModal: React.FC = () => {
 		localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
 		dispatch({ type: "SET_ACCESS_TOKEN", token });
 		getVoiceRuntime()?.resetVoiceRuntime();
-		window.dispatchEvent(new CustomEvent("agent:refresh-agents"));
-		window.dispatchEvent(new CustomEvent("agent:refresh-chats"));
-		window.dispatchEvent(new CustomEvent("agent:refresh-teams"));
+		window.dispatchEvent(new CustomEvent("agent:refresh-worker-data"));
 		setError("");
 		dispatch({ type: "SET_SETTINGS_OPEN", open: false });
 	};

@@ -1,0 +1,71 @@
+import { createQueryStream, interruptChat, steerChat } from './apiClient';
+
+describe('apiClient query payloads', () => {
+  const fetchMock = jest.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ code: 0, msg: 'ok', data: null }),
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  it('sends only required fields for basic query streams', async () => {
+    await createQueryStream({
+      requestId: 'req_1',
+      message: '显示广州的天气',
+    });
+
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(options.body))).toEqual({
+      requestId: 'req_1',
+      planningMode: false,
+      message: '显示广州的天气',
+    });
+    expect(JSON.parse(String(options.body))).not.toHaveProperty('runId');
+    expect(JSON.parse(String(options.body))).not.toHaveProperty('stream');
+  });
+
+  it('includes only present optional fields for query streams', async () => {
+    await createQueryStream({
+      requestId: 'req_2',
+      message: '继续',
+      planningMode: true,
+      chatId: 'chat_1',
+      agentKey: 'demoViewport',
+    });
+
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(options.body))).toEqual({
+      requestId: 'req_2',
+      planningMode: true,
+      message: '继续',
+      chatId: 'chat_1',
+      agentKey: 'demoViewport',
+    });
+  });
+
+  it('keeps runId for interrupt and steer requests', async () => {
+    await interruptChat({
+      requestId: 'req_interrupt',
+      chatId: 'chat_1',
+      runId: 'run_1',
+      message: '',
+    });
+    await steerChat({
+      requestId: 'req_steer',
+      chatId: 'chat_1',
+      runId: 'run_1',
+      message: '再试一次',
+    });
+
+    const interruptPayload = JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body));
+    const steerPayload = JSON.parse(String((fetchMock.mock.calls[1] as [string, RequestInit])[1].body));
+
+    expect(interruptPayload.runId).toBe('run_1');
+    expect(steerPayload.runId).toBe('run_1');
+  });
+});

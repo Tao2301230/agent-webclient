@@ -212,7 +212,6 @@ export interface QueryStreamParams {
   agentKey?: string;
   teamId?: string;
   chatId?: string;
-  runId?: string;
   role?: string;
   references?: unknown[];
   params?: Record<string, unknown>;
@@ -222,26 +221,28 @@ export interface QueryStreamParams {
 }
 
 export function createQueryStream(options: QueryStreamParams): Promise<Response> {
+  const body: Record<string, unknown> = {
+    requestId: options.requestId,
+    planningMode: options.planningMode ?? false,
+    message: options.message,
+  };
+
+  if (options.agentKey) body.agentKey = options.agentKey;
+  if (options.teamId) body.teamId = options.teamId;
+  if (options.chatId) body.chatId = options.chatId;
+  if (options.role) body.role = options.role;
+  if (options.references !== undefined) body.references = options.references;
+  if (options.params !== undefined) body.params = options.params;
+  if (options.scene) body.scene = options.scene;
+  if (options.stream !== undefined) body.stream = options.stream;
+
   return fetch('/api/ap/query', {
     method: 'POST',
     headers: buildAuthHeaders({
       Accept: 'text/event-stream',
       'Cache-Control': 'no-cache',
     }),
-    body: JSON.stringify({
-      requestId: options.requestId,
-      planningMode: options.planningMode ?? false,
-      message: options.message,
-      agentKey: options.agentKey,
-      teamId: options.teamId,
-      chatId: options.chatId,
-      runId: options.runId,
-      role: options.role,
-      references: options.references,
-      params: options.params,
-      scene: options.scene,
-      stream: options.stream,
-    }),
+    body: JSON.stringify(body),
     signal: options.signal,
   });
 }

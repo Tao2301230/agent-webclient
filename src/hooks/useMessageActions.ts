@@ -131,9 +131,7 @@ export function useMessageActions() {
           agentKey: selectedAgentKey || undefined,
           teamId: selectedTeamId || undefined,
           chatId: chatId || undefined,
-          runId: stateRef.current.runId || undefined,
           planningMode: Boolean(stateRef.current.planningMode),
-          stream: true,
           signal: abortController.signal,
         });
 

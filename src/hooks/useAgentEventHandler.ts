@@ -106,6 +106,14 @@ function isTerminalStatus(status?: string): boolean {
   return value === 'completed' || value === 'failed' || value === 'canceled' || value === 'cancelled';
 }
 
+export function findMatchingPendingSteer(state: AppState, event: AgentEvent) {
+  const steerId = toText(event.steerId);
+  if (!steerId) {
+    return null;
+  }
+  return state.pendingSteers.find((steer) => toText(steer.steerId) === steerId) || null;
+}
+
 /**
  * useAgentEventHandler — processes incoming SSE events and updates state.
  * Uses a local mutable cache to track node IDs between React renders,
@@ -242,31 +250,10 @@ export function useAgentEventHandler() {
       dispatch({ type: 'PUSH_EVENT', event });
       dispatch({ type: 'APPEND_DEBUG', line: `[${new Date().toLocaleTimeString()}] ${type}` });
 
-      /* request.query / request.steer */
-      if (type === 'request.query' || type === 'request.steer') {
+      /* request.query */
+      if (type === 'request.query') {
         const text = toText(event.message);
-        if (type === 'request.steer' && text) {
-          const steerId = toText(event.steerId) || toText(event.requestId) || String(Date.now());
-          dispatch({ type: 'REMOVE_PENDING_STEER', steerId });
-          const nodeId = `steer_${steerId}`;
-          dispatch({
-            type: 'SET_TIMELINE_NODE', id: nodeId,
-            node: {
-              id: nodeId,
-              kind: 'message',
-              role: 'user',
-              messageVariant: 'steer',
-              steerId,
-              text,
-              ts: event.timestamp || Date.now(),
-            },
-          });
-          dispatch({ type: 'APPEND_TIMELINE_ORDER', id: nodeId });
-        }
         if (event.chatId) dispatch({ type: 'SET_CHAT_ID', chatId: event.chatId });
-        if (event.runId && type === 'request.steer') {
-          dispatch({ type: 'SET_RUN_ID', runId: String(event.runId) });
-        }
         if (event.agentKey && event.chatId) {
           dispatch({ type: 'SET_CHAT_AGENT_BY_ID', chatId: event.chatId, agentKey: String(event.agentKey) });
         }
@@ -274,9 +261,7 @@ export function useAgentEventHandler() {
           dispatch({ type: 'SET_WORKER_PRIORITY_KEY', workerKey: `agent:${String(event.agentKey)}` });
         }
         cache.chatId = toText(event.chatId) || toText(state.chatId);
-        cache.runId = type === 'request.steer'
-          ? toText(event.runId) || cache.runId
-          : '';
+        cache.runId = '';
         cache.agentKey = toText(event.agentKey) || toText(state.chatAgentById.get(cache.chatId)) || resolveSelectedWorkerContext(state).agentKey;
         cache.teamId = readEventTeamId(event) || resolveSelectedWorkerContext(state).teamId;
         upsertLiveChatSummary({
@@ -285,6 +270,38 @@ export function useAgentEventHandler() {
           state,
           lastRunContent: type === 'request.query' ? text || undefined : undefined,
         });
+        return;
+      }
+
+      /* request.steer */
+      if (type === 'request.steer') {
+        const text = toText(event.message);
+        const pendingSteer = findMatchingPendingSteer(state, event);
+        const steerId = toText(event.steerId);
+        if (!pendingSteer || !steerId || !text) {
+          dispatch({
+            type: 'APPEND_DEBUG',
+            line: `[steer] ignored request.steer without pending match steerId=${steerId || '-'}`,
+          });
+          return;
+        }
+        dispatch({ type: 'REMOVE_PENDING_STEER', steerId });
+        const nodeId = `steer_${steerId}`;
+        dispatch({
+          type: 'SET_TIMELINE_NODE', id: nodeId,
+          node: {
+            id: nodeId,
+            kind: 'message',
+            role: 'user',
+            messageVariant: 'steer',
+            steerId,
+            text,
+            ts: event.timestamp || Date.now(),
+          },
+        });
+        dispatch({ type: 'APPEND_TIMELINE_ORDER', id: nodeId });
+        if (event.chatId) dispatch({ type: 'SET_CHAT_ID', chatId: event.chatId });
+        if (event.runId) dispatch({ type: 'SET_RUN_ID', runId: String(event.runId) });
         return;
       }
 

@@ -1,20 +1,31 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useAppState, useAppDispatch } from "../../context/AppContext";
 import { ACCESS_TOKEN_STORAGE_KEY } from "../../context/constants";
-import type { ConversationMode, VoiceCapabilities } from "../../context/types";
+import type {
+	ConversationMode,
+	VoiceCapabilities,
+	VoiceClientGateConfig,
+} from "../../context/types";
 import {
 	getVoiceCapabilitiesFlexible,
 	setAccessToken,
 } from "../../lib/apiClient";
 import { AsrDebugSession } from "../../lib/asrDebugSession";
 import {
-	DEFAULT_VOICE_ASR_DEFAULTS,
 	DEFAULT_VOICE_WS_PATH,
+	normalizeVoiceClientGateConfig,
+	resolveDefaultVoiceAsrDefaults,
 	resolveVoiceAsrRuntimeConfig,
 } from "../../lib/voiceAsrProtocol";
 import { DEFAULT_TTS_DEBUG_TEXT, getVoiceRuntime } from "../../lib/voiceRuntime";
 import { UiButton } from "../ui/UiButton";
 import { UiInput } from "../ui/UiInput";
+import {
+	commitClientGateDraft,
+	formatClientGateDraftState,
+	syncClientGateDraftState,
+	type ClientGateDraftField,
+} from "./settingsClientGateDrafts";
 
 export const SettingsModal: React.FC = () => {
 	const state = useAppState();
@@ -27,14 +38,34 @@ export const SettingsModal: React.FC = () => {
 	const [asrDebugInterimText, setAsrDebugInterimText] = useState("");
 	const [asrDebugFinalText, setAsrDebugFinalText] = useState("");
 	const [asrFallbackNotice, setAsrFallbackNotice] = useState("");
+	const [clientGateDrafts, setClientGateDrafts] = useState(() =>
+		formatClientGateDraftState(state.voiceChat.clientGate),
+	);
 	const sessionRef = useRef<AsrDebugSession | null>(null);
 	const accessTokenRef = useRef(state.accessToken);
 	const capabilitiesRef = useRef<VoiceCapabilities | null>(
 		state.voiceChat.capabilities,
 	);
 	const chatIdRef = useRef(state.chatId);
+	const activeClientGateFieldRef = useRef<ClientGateDraftField | null>(null);
 
 	accessTokenRef.current = state.accessToken;
+
+	const patchClientGate = useCallback(
+		(patch: Partial<VoiceClientGateConfig>) => {
+			dispatch({
+				type: "PATCH_VOICE_CHAT",
+				patch: {
+					clientGate: normalizeVoiceClientGateConfig({
+						...state.voiceChat.clientGate,
+						...patch,
+					}),
+					clientGateCustomized: true,
+				},
+			});
+		},
+		[dispatch, state.voiceChat.clientGate],
+	);
 
 	const handleSave = () => {
 		const token = tokenInput.trim();
@@ -155,6 +186,11 @@ export const SettingsModal: React.FC = () => {
 			return capabilitiesRef.current;
 		}
 		const capabilities = await getVoiceCapabilitiesFlexible();
+		const runtimeConfig = resolveVoiceAsrRuntimeConfig(
+			capabilities,
+			state.voiceChat.clientGate,
+			state.voiceChat.clientGateCustomized,
+		);
 		capabilitiesRef.current = capabilities;
 		dispatch({
 			type: "PATCH_VOICE_CHAT",
@@ -165,10 +201,18 @@ export const SettingsModal: React.FC = () => {
 				speechRate:
 					Number(capabilities?.tts?.speechRateDefault) ||
 					state.voiceChat.speechRate,
+				clientGate: state.voiceChat.clientGateCustomized
+					? state.voiceChat.clientGate
+					: runtimeConfig.asrDefaults.clientGate,
 			},
 		});
 		return capabilities;
-	}, [dispatch, state.voiceChat.speechRate]);
+	}, [
+		dispatch,
+		state.voiceChat.clientGate,
+		state.voiceChat.clientGateCustomized,
+		state.voiceChat.speechRate,
+	]);
 
 	const handleStartAsrDebug = useCallback(async () => {
 		try {
@@ -191,7 +235,7 @@ export const SettingsModal: React.FC = () => {
 					capabilities = {
 						websocketPath: DEFAULT_VOICE_WS_PATH,
 						asr: {
-							defaults: DEFAULT_VOICE_ASR_DEFAULTS,
+							defaults: resolveDefaultVoiceAsrDefaults(),
 						},
 					};
 					capabilitiesRef.current = capabilities;
@@ -201,19 +245,30 @@ export const SettingsModal: React.FC = () => {
 				throw new Error("当前语音后端未配置 ASR");
 			}
 			const runtimeConfig = resolveVoiceAsrRuntimeConfig(capabilities);
+			const effectiveRuntimeConfig = resolveVoiceAsrRuntimeConfig(
+				capabilities,
+				state.voiceChat.clientGate,
+				state.voiceChat.clientGateCustomized,
+			);
 			if (!sessionRef.current) {
 				sessionRef.current = createAsrSession();
 			}
 			await sessionRef.current.start({
 				websocketPath: runtimeConfig.websocketPath,
-				asrDefaults: runtimeConfig.asrDefaults,
+				asrDefaults: effectiveRuntimeConfig.asrDefaults,
 			});
 		} catch (err) {
 			const message = (err as Error).message;
 			setAsrDebugStatus(`error: ${message}`);
 			setAsrDebugRecording(false);
 		}
-	}, [createAsrSession, dispatch, ensureVoiceCapabilitiesLoaded]);
+	}, [
+		createAsrSession,
+		dispatch,
+		ensureVoiceCapabilitiesLoaded,
+		state.voiceChat.clientGate,
+		state.voiceChat.clientGateCustomized,
+	]);
 
 	const handleStopAsrDebug = useCallback(() => {
 		try {
@@ -233,6 +288,49 @@ export const SettingsModal: React.FC = () => {
 		}
 	}, [asrDebugRecording]);
 
+	const handleClientGateDraftChange = useCallback(
+		(field: ClientGateDraftField, value: string) => {
+			setClientGateDrafts((current) => ({
+				...current,
+				[field]: value,
+			}));
+		},
+		[],
+	);
+
+	const handleClientGateFieldFocus = useCallback(
+		(field: ClientGateDraftField) => {
+			activeClientGateFieldRef.current = field;
+		},
+		[],
+	);
+
+	const handleClientGateFieldCommit = useCallback(
+		(field: ClientGateDraftField) => {
+			const result = commitClientGateDraft(
+				field,
+				clientGateDrafts,
+				state.voiceChat.clientGate,
+			);
+			activeClientGateFieldRef.current = null;
+			setClientGateDrafts(result.nextDrafts);
+			if (result.nextPatch) {
+				patchClientGate(result.nextPatch);
+			}
+		},
+		[clientGateDrafts, patchClientGate, state.voiceChat.clientGate],
+	);
+
+	const handleClientGateFieldKeyDown = useCallback(
+		(field: ClientGateDraftField, event: React.KeyboardEvent<HTMLInputElement>) => {
+			if (event.key !== "Enter") return;
+			event.preventDefault();
+			handleClientGateFieldCommit(field);
+			event.currentTarget.blur();
+		},
+		[handleClientGateFieldCommit],
+	);
+
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
 			if (event.key !== "Escape") return;
@@ -247,6 +345,7 @@ export const SettingsModal: React.FC = () => {
 		setTtsDebugText((current) =>
 			current.trim() ? current : DEFAULT_TTS_DEBUG_TEXT,
 		);
+		setClientGateDrafts(formatClientGateDraftState(state.voiceChat.clientGate));
 	}, [state.settingsOpen]);
 
 	useEffect(() => {
@@ -264,6 +363,17 @@ export const SettingsModal: React.FC = () => {
 	}, [state.voiceChat.capabilities]);
 
 	useEffect(() => {
+		if (!state.settingsOpen) return;
+		setClientGateDrafts((current) =>
+			syncClientGateDraftState(
+				current,
+				state.voiceChat.clientGate,
+				activeClientGateFieldRef.current,
+			),
+		);
+	}, [state.settingsOpen, state.voiceChat.clientGate]);
+
+	useEffect(() => {
 		if (!chatIdRef.current) {
 			chatIdRef.current = state.chatId;
 			return;
@@ -278,10 +388,6 @@ export const SettingsModal: React.FC = () => {
 		<div
 			className="modal"
 			id="settings-modal"
-			onClick={(e) => {
-				if (e.target === e.currentTarget)
-					dispatch({ type: "SET_SETTINGS_OPEN", open: false });
-			}}
 		>
 			<div className="modal-card settings-card">
 				<div className="settings-head">
@@ -394,6 +500,142 @@ export const SettingsModal: React.FC = () => {
 					>
 						清空日志
 					</UiButton>
+				</div>
+
+				<div className="field-group" style={{ marginTop: "14px" }}>
+					<label htmlFor="client-gate-enabled">前端语音门限 / Client Gate</label>
+					<label className="settings-toggle" htmlFor="client-gate-enabled">
+						<input
+							id="client-gate-enabled"
+							type="checkbox"
+							checked={state.voiceChat.clientGate.enabled}
+							onChange={(event) =>
+								patchClientGate({ enabled: event.target.checked })
+							}
+						/>
+						<span>启用前端本地门限过滤</span>
+					</label>
+					<div className="settings-numeric-grid">
+						<div className="field-group">
+							<label htmlFor="client-gate-threshold">RMS Threshold</label>
+							<UiInput
+								id="client-gate-threshold"
+								inputSize="md"
+								type="text"
+								inputMode="decimal"
+								value={clientGateDrafts.rmsThreshold}
+								onChange={(event) =>
+									handleClientGateDraftChange(
+										"rmsThreshold",
+										event.target.value,
+									)
+								}
+								onFocus={() =>
+									handleClientGateFieldFocus("rmsThreshold")
+								}
+								onBlur={() =>
+									handleClientGateFieldCommit("rmsThreshold")
+								}
+								onKeyDown={(event) =>
+									handleClientGateFieldKeyDown(
+										"rmsThreshold",
+										event,
+									)
+								}
+							/>
+						</div>
+						<div className="field-group">
+							<label htmlFor="client-gate-open-hold">Open Hold (ms)</label>
+							<UiInput
+								id="client-gate-open-hold"
+								inputSize="md"
+								type="text"
+								inputMode="numeric"
+								value={clientGateDrafts.openHoldMs}
+								onChange={(event) =>
+									handleClientGateDraftChange(
+										"openHoldMs",
+										event.target.value,
+									)
+								}
+								onFocus={() =>
+									handleClientGateFieldFocus("openHoldMs")
+								}
+								onBlur={() =>
+									handleClientGateFieldCommit("openHoldMs")
+								}
+								onKeyDown={(event) =>
+									handleClientGateFieldKeyDown(
+										"openHoldMs",
+										event,
+									)
+								}
+							/>
+						</div>
+						<div className="field-group">
+							<label htmlFor="client-gate-close-hold">Close Hold (ms)</label>
+							<UiInput
+								id="client-gate-close-hold"
+								inputSize="md"
+								type="text"
+								inputMode="numeric"
+								value={clientGateDrafts.closeHoldMs}
+								onChange={(event) =>
+									handleClientGateDraftChange(
+										"closeHoldMs",
+										event.target.value,
+									)
+								}
+								onFocus={() =>
+									handleClientGateFieldFocus("closeHoldMs")
+								}
+								onBlur={() =>
+									handleClientGateFieldCommit("closeHoldMs")
+								}
+								onKeyDown={(event) =>
+									handleClientGateFieldKeyDown(
+										"closeHoldMs",
+										event,
+									)
+								}
+							/>
+						</div>
+						<div className="field-group">
+							<label htmlFor="client-gate-preroll">Pre-roll (ms)</label>
+							<UiInput
+								id="client-gate-preroll"
+								inputSize="md"
+								type="text"
+								inputMode="numeric"
+								value={clientGateDrafts.preRollMs}
+								onChange={(event) =>
+									handleClientGateDraftChange(
+										"preRollMs",
+										event.target.value,
+									)
+								}
+								onFocus={() =>
+									handleClientGateFieldFocus("preRollMs")
+								}
+								onBlur={() =>
+									handleClientGateFieldCommit("preRollMs")
+								}
+								onKeyDown={(event) =>
+									handleClientGateFieldKeyDown(
+										"preRollMs",
+										event,
+									)
+								}
+							/>
+						</div>
+					</div>
+					<p className="settings-hint">
+						rmsThreshold 越大越难触发，适合过滤轻声；open/close
+						控制开闭稳定性；preRoll 用于避免吞掉开头音节。
+					</p>
+					<p className="settings-hint">
+						当前配置仅保留在本页会话内，ASR Debug 与下一次语聊启动都会使用它。
+					</p>
 				</div>
 
 				<div className="field-group" style={{ marginTop: "14px" }}>

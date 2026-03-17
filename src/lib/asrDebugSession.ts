@@ -9,6 +9,8 @@ import {
 import {
 	buildVoiceAsrStartPayload,
 	buildVoiceAsrStopFrames,
+	mergeVoiceAsrDefaults,
+	type VoiceAsrDefaultsInput,
 	type VoiceAsrDefaults,
 } from "./voiceAsrProtocol";
 import {
@@ -36,7 +38,7 @@ export interface AsrDebugStatePatch {
 export interface AsrDebugSessionOptions {
 	getAccessToken: () => string;
 	getVoiceWsPath: () => string;
-	getAsrDefaults: () => VoiceAsrDefaults | undefined;
+	getAsrDefaults: () => VoiceAsrDefaultsInput | undefined;
 	onState: (patch: AsrDebugStatePatch) => void;
 	appendDebug?: (line: string) => void;
 	taskIdFactory?: () => string;
@@ -57,6 +59,7 @@ export class AsrDebugSession {
 	private stopTimer: number | null = null;
 	private stopping = false;
 	private destroyed = false;
+	private currentAsrDefaults: VoiceAsrDefaults = mergeVoiceAsrDefaults();
 	private options: AsrDebugSessionOptions;
 
 	constructor(options: AsrDebugSessionOptions) {
@@ -117,6 +120,7 @@ export class AsrDebugSession {
 		}
 		this.socket = null;
 		this.currentTaskId = "";
+		this.currentAsrDefaults = mergeVoiceAsrDefaults();
 	}
 
 	private sendJson(payload: Record<string, unknown>): void {
@@ -159,6 +163,7 @@ export class AsrDebugSession {
 			this.captureState,
 			this.sendAudioChunk,
 			(message) => this.handleFailure(message),
+			this.currentAsrDefaults.clientGate,
 		);
 		if (!ok) return;
 		this.emitState({
@@ -240,7 +245,7 @@ export class AsrDebugSession {
 
 	async start(config?: {
 		websocketPath?: string;
-		asrDefaults?: VoiceAsrDefaults;
+		asrDefaults?: VoiceAsrDefaultsInput;
 	}): Promise<void> {
 		if (this.destroyed) {
 			throw new Error("ASR 调试会话已销毁");
@@ -257,7 +262,9 @@ export class AsrDebugSession {
 		const websocketPath =
 			String(config?.websocketPath || this.options.getVoiceWsPath() || "").trim() ||
 			"/api/voice/ws";
-		const asrDefaults = config?.asrDefaults || this.options.getAsrDefaults();
+		const asrDefaults = mergeVoiceAsrDefaults(
+			config?.asrDefaults || this.options.getAsrDefaults(),
+		);
 		const target = describeVoiceChatWsTarget(websocketPath);
 		const url = resolveVoiceChatWsUrl(websocketPath, accessToken);
 		const taskId =
@@ -265,6 +272,7 @@ export class AsrDebugSession {
 			`settings_asr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 		this.currentTaskId = taskId;
+		this.currentAsrDefaults = asrDefaults;
 		this.chunkCounter = 0;
 		this.stopping = false;
 		this.appendDebug(`connect ${target}`);

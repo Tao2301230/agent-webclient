@@ -35,6 +35,7 @@ import {
 } from "./constants";
 import type { DebugTab, LayoutMode } from "./constants";
 import { upsertChatSummary } from "../lib/chatSummary";
+import { resolveDefaultVoiceAsrDefaults } from "../lib/voiceAsrProtocol";
 
 /* ============================================
    Initial State Factory
@@ -60,6 +61,8 @@ export function createInitialState(): AppState {
 		voicesError: "",
 		selectedVoice: "",
 		speechRate: 1.2,
+		clientGate: resolveDefaultVoiceAsrDefaults().clientGate,
+		clientGateCustomized: false,
 		currentAgentKey: "",
 		currentAgentName: "",
 	};

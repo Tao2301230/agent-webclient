@@ -32,6 +32,7 @@ import {
 import {
 	buildVoiceAsrStartPayload,
 	buildVoiceAsrStopFrames,
+	resolveVoiceAsrRuntimeConfig,
 } from "../lib/voiceAsrProtocol";
 import { runVoiceChatListeningReady } from "../lib/voiceChatListeningReady";
 
@@ -424,15 +425,26 @@ export function useVoiceChatRuntime() {
 		return true;
 	}, []);
 
+	const resolveCurrentAsrRuntime = useCallback(
+		(capabilities?: VoiceCapabilities | null) =>
+			resolveVoiceAsrRuntimeConfig(
+				capabilities ?? stateRef.current.voiceChat.capabilities,
+				stateRef.current.voiceChat.clientGate,
+				stateRef.current.voiceChat.clientGateCustomized,
+			),
+		[stateRef],
+	);
+
 	const startAsrTask = useCallback(
 		(reason: string) => {
 			if (asrTaskActiveRef.current || asrStartInFlightRef.current) {
 				return true;
 			}
+			const runtimeConfig = resolveCurrentAsrRuntime();
 			const sent = sendJson(
 				buildVoiceAsrStartPayload(
 					QA_ASR_TASK_ID,
-					stateRef.current.voiceChat.capabilities?.asr?.defaults,
+					runtimeConfig.asrDefaults,
 				),
 			);
 			if (!sent) {
@@ -445,11 +457,12 @@ export function useVoiceChatRuntime() {
 			appendDebug(`sent asr.start (${reason})`);
 			return true;
 		},
-		[appendDebug, sendJson, stateRef],
+		[appendDebug, resolveCurrentAsrRuntime, sendJson],
 	);
 
 	const ensureAudioCapture = useCallback(async () => {
 		if (capturePausedRef.current) return false;
+		const runtimeConfig = resolveCurrentAsrRuntime();
 		return initializeVoiceAudioCapture(
 			audioCaptureStateRef.current,
 			(chunk) => {
@@ -472,8 +485,14 @@ export function useVoiceChatRuntime() {
 			(message) => {
 				handleFatalError(message);
 			},
+			runtimeConfig.asrDefaults.clientGate,
 		);
-	}, [appendDebug, handleFatalError, sendJson]);
+	}, [
+		appendDebug,
+		handleFatalError,
+		resolveCurrentAsrRuntime,
+		sendJson,
+	]);
 
 	const pauseAudioCapture = useCallback(() => {
 		if (!audioCaptureStateRef.current.captureStarted || capturePausedRef.current) {
@@ -545,6 +564,7 @@ export function useVoiceChatRuntime() {
 		if (!stateRef.current.voiceChat.capabilitiesLoaded) {
 			try {
 				capabilities = await getVoiceCapabilitiesFlexible();
+				const runtimeConfig = resolveCurrentAsrRuntime(capabilities);
 				patchVoiceChat({
 					capabilities,
 					capabilitiesLoaded: true,
@@ -552,6 +572,9 @@ export function useVoiceChatRuntime() {
 					speechRate:
 						Number(capabilities?.tts?.speechRateDefault) ||
 						stateRef.current.voiceChat.speechRate,
+					clientGate: stateRef.current.voiceChat.clientGateCustomized
+						? stateRef.current.voiceChat.clientGate
+						: runtimeConfig.asrDefaults.clientGate,
 				});
 			} catch (error) {
 				const message = (error as Error).message;
@@ -602,7 +625,7 @@ export function useVoiceChatRuntime() {
 			selectedVoice:
 				selectedVoice || stateRef.current.voiceChat.selectedVoice,
 		};
-	}, [patchVoiceChat, stateRef]);
+	}, [patchVoiceChat, resolveCurrentAsrRuntime, stateRef]);
 
 	const connectSocket = useCallback(async () => {
 		if (socketRef.current?.readyState === WebSocket.OPEN) {

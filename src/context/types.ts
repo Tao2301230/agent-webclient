@@ -209,6 +209,22 @@ export type InputMode = 'text' | 'voice';
 export type VoiceChatStatus = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking' | 'error';
 export type VoiceChatWsStatus = 'idle' | 'connecting' | 'open' | 'closed' | 'error';
 
+export interface VoiceClientGateSettings {
+  enabled?: boolean;
+  rmsThreshold?: number;
+  openHoldMs?: number;
+  closeHoldMs?: number;
+  preRollMs?: number;
+}
+
+export interface VoiceClientGateConfig {
+  enabled: boolean;
+  rmsThreshold: number;
+  openHoldMs: number;
+  closeHoldMs: number;
+  preRollMs: number;
+}
+
 export interface VoiceCapabilities {
   websocketPath?: string;
   asr?: {
@@ -216,6 +232,7 @@ export interface VoiceCapabilities {
     defaults?: {
       sampleRate?: number;
       language?: string;
+      clientGate?: VoiceClientGateSettings;
       turnDetection?: {
         type?: string;
         threshold?: number;
@@ -259,6 +276,8 @@ export interface VoiceChatState {
   voicesError: string;
   selectedVoice: string;
   speechRate: number;
+  clientGate: VoiceClientGateConfig;
+  clientGateCustomized: boolean;
   currentAgentKey: string;
   currentAgentName: string;
 }

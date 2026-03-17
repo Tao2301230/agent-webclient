@@ -119,6 +119,13 @@ describe("AsrDebugSession", () => {
 			taskId: expect.stringMatching(/^settings_asr_/),
 			sampleRate: 16000,
 			language: "zh",
+			clientGate: {
+				enabled: true,
+				rmsThreshold: 0.008,
+				openHoldMs: 120,
+				closeHoldMs: 480,
+				preRollMs: 240,
+			},
 		});
 
 		socket.message({

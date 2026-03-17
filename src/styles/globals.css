@@ -3446,6 +3446,27 @@ textarea {
   font-weight: 600;
 }
 
+.settings-toggle {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px !important;
+  letter-spacing: 0 !important;
+  color: var(--ink-2) !important;
+  margin-bottom: 10px !important;
+}
+
+.settings-toggle input {
+  width: auto !important;
+  margin: 0;
+}
+
+.settings-numeric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 /* ========================================
    Responsive Layout
    ======================================== */

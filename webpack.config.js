@@ -1,4 +1,5 @@
 const path = require('path');
+const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
@@ -12,6 +13,10 @@ const allowedHosts = allowedHostsEnv === 'all'
     .split(',')
     .map((host) => host.trim())
     .filter(Boolean);
+
+function defineEnvLiteral(value) {
+  return JSON.stringify(value == null ? '' : String(value));
+}
 
 module.exports = (env, argv) => {
   const isProd = argv.mode === 'production';
@@ -70,6 +75,13 @@ module.exports = (env, argv) => {
       ],
     },
     plugins: [
+      new webpack.DefinePlugin({
+        'globalThis.__APP_VOICE_ASR_CLIENT_GATE_ENABLED__': defineEnvLiteral(process.env.APP_VOICE_ASR_CLIENT_GATE_ENABLED),
+        'globalThis.__APP_VOICE_ASR_CLIENT_GATE_RMS_THRESHOLD__': defineEnvLiteral(process.env.APP_VOICE_ASR_CLIENT_GATE_RMS_THRESHOLD),
+        'globalThis.__APP_VOICE_ASR_CLIENT_GATE_OPEN_HOLD_MS__': defineEnvLiteral(process.env.APP_VOICE_ASR_CLIENT_GATE_OPEN_HOLD_MS),
+        'globalThis.__APP_VOICE_ASR_CLIENT_GATE_CLOSE_HOLD_MS__': defineEnvLiteral(process.env.APP_VOICE_ASR_CLIENT_GATE_CLOSE_HOLD_MS),
+        'globalThis.__APP_VOICE_ASR_CLIENT_GATE_PRE_ROLL_MS__': defineEnvLiteral(process.env.APP_VOICE_ASR_CLIENT_GATE_PRE_ROLL_MS),
+      }),
       new HtmlWebpackPlugin({
         template: './public/index.html',
         title: 'AGENT Webclient',

@@ -97,6 +97,10 @@ export const ComposerArea: React.FC = () => {
 	const currentWorker = useMemo(() => resolveCurrentWorkerSummary(state), [state]);
 	const voiceModeAvailable = currentWorker?.type === "agent";
 	const isVoiceMode = state.inputMode === "voice";
+	const voiceUserPreview = state.voiceChat.partialUserText || "等待你开口...";
+	const voiceAssistantPreview =
+		state.voiceChat.partialAssistantText ||
+		(state.voiceChat.status === "thinking" ? "正在组织回答..." : "等待回答...");
 	const voiceStatusText = useMemo(() => {
 		const status = state.voiceChat.status;
 		if (status === "connecting") return "正在连接语聊...";
@@ -827,8 +831,18 @@ export const ComposerArea: React.FC = () => {
 							{isVoiceMode ? (
 								<div className="voice-chat-panel" aria-live="polite">
 									<div className="voice-chat-panel-header">
-										<div className="voice-chat-panel-title">
-											语聊中
+										<div className="voice-chat-panel-heading">
+											<div className="voice-chat-panel-title">
+												语聊中
+											</div>
+											<div className="voice-chat-worker">
+												当前员工：
+												<strong>
+													{state.voiceChat.currentAgentName ||
+														currentWorker?.displayName ||
+														"--"}
+												</strong>
+											</div>
 										</div>
 										<div
 											className={`voice-chat-status is-${state.voiceChat.status}`}
@@ -836,31 +850,28 @@ export const ComposerArea: React.FC = () => {
 											{voiceStatusText}
 										</div>
 									</div>
-									<div className="voice-chat-worker">
-										当前员工：
-										<strong>
-											{state.voiceChat.currentAgentName ||
-												currentWorker?.displayName ||
-												"--"}
-										</strong>
-									</div>
-									<div className="voice-chat-snippet">
-										<div className="voice-chat-snippet-label">
-											你刚刚说
+									<div className="voice-chat-summary-grid">
+										<div className="voice-chat-snippet">
+											<div className="voice-chat-snippet-label">
+												你刚刚说
+											</div>
+											<div
+												className="voice-chat-snippet-text"
+												title={voiceUserPreview}
+											>
+												{voiceUserPreview}
+											</div>
 										</div>
-										<div className="voice-chat-snippet-text">
-											{state.voiceChat.partialUserText || "等待你开口..."}
-										</div>
-									</div>
-									<div className="voice-chat-snippet">
-										<div className="voice-chat-snippet-label">
-											助手回复
-										</div>
-										<div className="voice-chat-snippet-text">
-											{state.voiceChat.partialAssistantText ||
-												(state.voiceChat.status === "thinking"
-													? "正在组织回答..."
-													: "等待回答...")}
+										<div className="voice-chat-snippet">
+											<div className="voice-chat-snippet-label">
+												助手回复
+											</div>
+											<div
+												className="voice-chat-snippet-text"
+												title={voiceAssistantPreview}
+											>
+												{voiceAssistantPreview}
+											</div>
 										</div>
 									</div>
 									{state.voiceChat.error && (
@@ -964,19 +975,23 @@ export const ComposerArea: React.FC = () => {
 					</div>
 				</div>
 				{voiceModeAvailable && (
-					<div className="composer-voice-sidecar">
+					<div
+						className={`composer-voice-sidecar ${isVoiceMode ? "is-voice-mode" : "is-text-mode"}`}
+					>
 						<button
 							type="button"
-							className={`voice-mode-toggle ${isVoiceMode ? "is-active" : ""}`}
+							className={`voice-mode-toggle ${isVoiceMode ? "is-active" : "is-compact"}`}
 							disabled={isFrontendActive || state.streaming}
 							onClick={toggleVoiceMode}
 							title={isVoiceMode ? "返回文字输入" : "进入语聊模式"}
 							aria-label={isVoiceMode ? "返回文字输入" : "进入语聊模式"}
 						>
 							<PhoneDialIcon active={isVoiceMode} />
-							<span className="voice-mode-toggle-text">
-								{isVoiceMode ? "返回文字" : "进入语聊"}
-							</span>
+							{isVoiceMode && (
+								<span className="voice-mode-toggle-text">
+									返回文字
+								</span>
+							)}
 						</button>
 					</div>
 				)}

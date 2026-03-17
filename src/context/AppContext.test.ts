@@ -127,6 +127,64 @@ describe('appReducer conversation reset behavior', () => {
     });
   });
 
+  it('patches content tts voice blocks without clobbering the latest streamed text or segments', () => {
+    const baseState = createInitialState();
+    const contentNode = {
+      id: 'content_1',
+      kind: 'content' as const,
+      contentId: 'content_1',
+      text: '```tts-voice\nhello',
+      segments: [
+        {
+          kind: 'ttsVoice' as const,
+          signature: 'content_1::tts-voice::0',
+          text: 'hello',
+          closed: false,
+          startOffset: 0,
+        },
+      ],
+      ts: 123,
+    };
+    const state = {
+      ...baseState,
+      timelineNodes: new Map([['content_1', contentNode]]),
+      contentNodeById: new Map([['content_1', 'content_1']]),
+    };
+
+    const next = appReducer(state, {
+      type: 'PATCH_CONTENT_TTS_VOICE_BLOCK',
+      nodeId: 'content_1',
+      signature: 'content_1::tts-voice::0',
+      patch: {
+        text: 'hello',
+        closed: false,
+        status: 'connecting',
+        error: '',
+      },
+    });
+
+    expect(next.timelineNodes.get('content_1')).toMatchObject({
+      text: '```tts-voice\nhello',
+      segments: [
+        {
+          kind: 'ttsVoice',
+          signature: 'content_1::tts-voice::0',
+          text: 'hello',
+          closed: false,
+          startOffset: 0,
+        },
+      ],
+      ttsVoiceBlocks: {
+        'content_1::tts-voice::0': expect.objectContaining({
+          signature: 'content_1::tts-voice::0',
+          text: 'hello',
+          closed: false,
+          status: 'connecting',
+        }),
+      },
+    });
+  });
+
   it('opens, updates, and closes the command modal state', () => {
     const baseState = createInitialState();
 

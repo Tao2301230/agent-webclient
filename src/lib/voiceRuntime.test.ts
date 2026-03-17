@@ -405,6 +405,46 @@ describe("voiceRuntime v2 protocol", () => {
 		expect(blockState.get(signature)?.status).toBe("connecting");
 	});
 
+	it("replays a specific tts voice block on demand", async () => {
+		installBrowser(MockWebSocket as unknown as typeof WebSocket);
+		const blockState = new Map<string, Partial<TtsVoiceBlock>>();
+
+		const runtime = initVoiceRuntime({
+			getState: () =>
+				({
+					accessToken: "token_abc",
+					chatId: "chat_1",
+					voiceChat: { capabilities: null },
+				}) as AppState,
+			onPatchBlock: (_contentId, signature, patch) => {
+				blockState.set(signature, {
+					...(blockState.get(signature) || {}),
+					...patch,
+				});
+			},
+			onRemoveInactiveBlocks: () => undefined,
+		});
+
+		await runtime.replayTtsVoiceBlock(
+			"content_1",
+			"content_1::tts-voice::0",
+			"hello world",
+		);
+		await flushMicrotasks();
+
+		const socket = MockWebSocket.instances[0];
+		expect(parseFrame(socket.sentFrames[0])).toMatchObject({
+			type: "tts.start",
+			text: "hello world",
+			chatId: "chat_1",
+		});
+		expect(blockState.get("content_1::tts-voice::0")).toMatchObject({
+			text: "hello world",
+			closed: true,
+			status: "connecting",
+		});
+	});
+
 	it("times out pending websocket handshakes instead of waiting forever", async () => {
 		jest.useFakeTimers();
 

@@ -26,6 +26,7 @@ import type {
 	UiTimerHandle,
 	PendingSteer,
 	VoiceChatState,
+	TtsVoiceBlock,
 } from "./types";
 import {
 	ACCESS_TOKEN_STORAGE_KEY,
@@ -126,6 +127,7 @@ export function createInitialState(): AppState {
 		mentionActiveIndex: 0,
 		activeFrontendTool: null,
 		accessToken: storedToken,
+		audioMuted: false,
 		ttsDebugStatus: "idle",
 		planningMode: false,
 		inputMode: "text",
@@ -190,6 +192,7 @@ export type AppAction =
 	| { type: "SET_PENDING_NEW_CHAT_AGENT_KEY"; agentKey: string }
 	| { type: "SET_WORKER_PRIORITY_KEY"; workerKey: string }
 	| { type: "SET_ACCESS_TOKEN"; token: string }
+	| { type: "SET_AUDIO_MUTED"; muted: boolean }
 	| { type: "SET_TTS_DEBUG_STATUS"; status: string }
 	| { type: "SET_PLANNING_MODE"; enabled: boolean }
 	| { type: "SET_INPUT_MODE"; mode: AppState["inputMode"] }
@@ -220,6 +223,17 @@ export type AppAction =
 	| { type: "PATCH_COMMAND_MODAL"; modal: Partial<AppState["commandModal"]> }
 	| { type: "CLOSE_COMMAND_MODAL" }
 	| { type: "SET_TIMELINE_NODE"; id: string; node: TimelineNode }
+	| {
+			type: "PATCH_CONTENT_TTS_VOICE_BLOCK";
+			nodeId: string;
+			signature: string;
+			patch: Partial<TtsVoiceBlock>;
+	  }
+	| {
+			type: "REMOVE_INACTIVE_CONTENT_TTS_VOICE_BLOCKS";
+			nodeId: string;
+			activeSignatures: Set<string>;
+	  }
 	| { type: "APPEND_TIMELINE_ORDER"; id: string }
 	| { type: "SET_TOOL_STATE"; key: string; state: ToolState }
 	| { type: "SET_PENDING_TOOL"; key: string; tool: PendingTool }
@@ -453,6 +467,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 			return { ...state, workerPriorityKey: action.workerKey };
 		case "SET_ACCESS_TOKEN":
 			return { ...state, accessToken: action.token };
+		case "SET_AUDIO_MUTED":
+			return { ...state, audioMuted: action.muted };
 		case "SET_TTS_DEBUG_STATUS":
 			return { ...state, ttsDebugStatus: action.status };
 		case "SET_PLANNING_MODE":
@@ -549,6 +565,59 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 		case "SET_TIMELINE_NODE": {
 			const timelineNodes = new Map(state.timelineNodes);
 			timelineNodes.set(action.id, action.node);
+			return { ...state, timelineNodes };
+		}
+		case "PATCH_CONTENT_TTS_VOICE_BLOCK": {
+			const current = state.timelineNodes.get(action.nodeId);
+			if (!current || current.kind !== "content") {
+				return state;
+			}
+
+			const blocks = { ...(current.ttsVoiceBlocks || {}) };
+			const existing = blocks[action.signature] || {
+				signature: action.signature,
+				text: "",
+				closed: false,
+				expanded: false,
+				status: "ready" as const,
+				error: "",
+			};
+			blocks[action.signature] = {
+				...existing,
+				...action.patch,
+				signature: action.signature,
+			};
+
+			const timelineNodes = new Map(state.timelineNodes);
+			timelineNodes.set(action.nodeId, {
+				...current,
+				ttsVoiceBlocks: blocks,
+			});
+			return { ...state, timelineNodes };
+		}
+		case "REMOVE_INACTIVE_CONTENT_TTS_VOICE_BLOCKS": {
+			const current = state.timelineNodes.get(action.nodeId);
+			if (!current || current.kind !== "content" || !current.ttsVoiceBlocks) {
+				return state;
+			}
+
+			const blocks = { ...current.ttsVoiceBlocks };
+			let changed = false;
+			for (const signature of Object.keys(blocks)) {
+				if (!action.activeSignatures.has(signature)) {
+					delete blocks[signature];
+					changed = true;
+				}
+			}
+			if (!changed) {
+				return state;
+			}
+
+			const timelineNodes = new Map(state.timelineNodes);
+			timelineNodes.set(action.nodeId, {
+				...current,
+				ttsVoiceBlocks: blocks,
+			});
 			return { ...state, timelineNodes };
 		}
 		case "APPEND_TIMELINE_ORDER":

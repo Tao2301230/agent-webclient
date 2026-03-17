@@ -414,6 +414,7 @@ export interface AppState {
   mentionActiveIndex: number;
   activeFrontendTool: ActiveFrontendTool | null;
   accessToken: string;
+  audioMuted: boolean;
   ttsDebugStatus: string;
   planningMode: boolean;
   inputMode: InputMode;

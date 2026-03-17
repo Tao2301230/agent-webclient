@@ -82,11 +82,13 @@ class VoiceRuntime {
 	private activeAudioTaskId = "";
 	private activeSampleRate = DEFAULT_SAMPLE_RATE;
 	private activeChannels = DEFAULT_CHANNELS;
+	private muted = false;
 	private debugTtsRequest: DebugTtsRequestState | null = null;
 	private options: RuntimeOptions;
 
 	constructor(options: RuntimeOptions) {
 		this.options = options;
+		this.muted = Boolean(options.getState().audioMuted);
 	}
 
 	private appendDebug(message: string): void {
@@ -476,6 +478,46 @@ class VoiceRuntime {
 		});
 	}
 
+	async replayTtsVoiceBlock(
+		contentId: string,
+		signature: string,
+		rawText: string,
+	): Promise<void> {
+		const normalizedContentId = String(contentId || "").trim();
+		const normalizedSignature = String(signature || "").trim();
+		const text = String(rawText || "");
+		if (!normalizedContentId || !normalizedSignature || !text.trim()) {
+			return;
+		}
+
+		const session = this.ensureSession(
+			normalizedContentId,
+			normalizedSignature,
+		);
+		session.closed = true;
+		this.updateBlock(normalizedContentId, normalizedSignature, {
+			signature: normalizedSignature,
+			text,
+			closed: true,
+			status: "connecting",
+			error: "",
+		});
+
+		try {
+			await this.prepareAudioPlayback();
+			await this.ensureSocket();
+		} catch (error) {
+			const message = (error as Error).message;
+			this.updateBlock(normalizedContentId, normalizedSignature, {
+				status: "error",
+				error: message,
+			});
+			throw error;
+		}
+
+		this.restartSessionWithText(session, text);
+	}
+
 	private removeSession(session: VoiceSession, stopTask = false): void {
 		if (stopTask && session.taskId) {
 			this.stopTask(session.taskId);
@@ -579,6 +621,13 @@ class VoiceRuntime {
 		this.resetPlayback();
 		this.closeSocket();
 		this.setDebugStatus("idle");
+	}
+
+	setMuted(muted: boolean): void {
+		this.muted = Boolean(muted);
+		if (this.muted) {
+			this.resetPlayback();
+		}
 	}
 
 	async debugSpeakTtsVoice(rawText: string): Promise<string> {

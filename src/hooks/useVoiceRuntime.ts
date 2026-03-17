@@ -1,23 +1,9 @@
 import { useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import type { TimelineNode, TtsVoiceBlock } from '../context/types';
-import { initVoiceRuntime } from '../lib/voiceRuntime';
-
-function ensureVoiceBlock(base: Partial<TtsVoiceBlock> = {}): TtsVoiceBlock {
-  return {
-    signature: String(base.signature || ''),
-    text: String(base.text || ''),
-    closed: Boolean(base.closed),
-    expanded: Boolean(base.expanded),
-    status: (base.status as TtsVoiceBlock['status']) || 'ready',
-    error: String(base.error || ''),
-    sampleRate: base.sampleRate,
-    channels: base.channels,
-  };
-}
+import { getVoiceRuntime, initVoiceRuntime } from '../lib/voiceRuntime';
 
 export function useVoiceRuntime() {
-  const { dispatch, stateRef } = useAppContext();
+  const { state, dispatch, stateRef } = useAppContext();
 
   useEffect(() => {
     const runtime = initVoiceRuntime({
@@ -25,44 +11,25 @@ export function useVoiceRuntime() {
       onPatchBlock: (contentId, signature, patch) => {
         const nodeId = stateRef.current.contentNodeById.get(contentId);
         if (!nodeId) return;
-        const current = stateRef.current.timelineNodes.get(nodeId);
-        if (!current || current.kind !== 'content') return;
-
-        const blocks = { ...(current.ttsVoiceBlocks || {}) };
-        const existing = ensureVoiceBlock(blocks[signature] || { signature });
-        blocks[signature] = {
-          ...existing,
-          ...patch,
+        dispatch({
+          type: 'PATCH_CONTENT_TTS_VOICE_BLOCK',
+          nodeId,
           signature,
-        };
-
-        const nextNode: TimelineNode = {
-          ...current,
-          ttsVoiceBlocks: blocks,
-        };
-        dispatch({ type: 'SET_TIMELINE_NODE', id: nodeId, node: nextNode });
+          patch: {
+            ...patch,
+            signature,
+          },
+        });
       },
       onRemoveInactiveBlocks: (contentId, activeSignatures) => {
         const nodeId = stateRef.current.contentNodeById.get(contentId);
         if (!nodeId) return;
-        const current = stateRef.current.timelineNodes.get(nodeId);
-        if (!current || current.kind !== 'content') return;
 
-        const blocks = { ...(current.ttsVoiceBlocks || {}) };
-        let changed = false;
-        for (const signature of Object.keys(blocks)) {
-          if (!activeSignatures.has(signature)) {
-            delete blocks[signature];
-            changed = true;
-          }
-        }
-        if (!changed) return;
-
-        const nextNode: TimelineNode = {
-          ...current,
-          ttsVoiceBlocks: blocks,
-        };
-        dispatch({ type: 'SET_TIMELINE_NODE', id: nodeId, node: nextNode });
+        dispatch({
+          type: 'REMOVE_INACTIVE_CONTENT_TTS_VOICE_BLOCKS',
+          nodeId,
+          activeSignatures,
+        });
       },
       onDebug: (line) => {
         dispatch({ type: 'APPEND_DEBUG', line: `[voice] ${line}` });
@@ -71,6 +38,7 @@ export function useVoiceRuntime() {
         dispatch({ type: 'SET_TTS_DEBUG_STATUS', status });
       },
     });
+    runtime.setMuted(stateRef.current.audioMuted);
 
     const stopHandler = (e: Event) => {
       const detail = (e as CustomEvent).detail || {};
@@ -92,4 +60,8 @@ export function useVoiceRuntime() {
       runtime.resetVoiceRuntime();
     };
   }, [dispatch, stateRef]);
+
+  useEffect(() => {
+    getVoiceRuntime()?.setMuted(state.audioMuted);
+  }, [state.audioMuted]);
 }

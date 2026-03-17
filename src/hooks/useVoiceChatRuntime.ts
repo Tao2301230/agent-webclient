@@ -37,6 +37,8 @@ import { runVoiceChatListeningReady } from "../lib/voiceChatListeningReady";
 
 const QA_ASR_TASK_ID = "qa-asr";
 const QA_TTS_TASK_ID = "qa-tts";
+const MAX_VOICE_WS_RECONNECT_ATTEMPTS = 4;
+const VOICE_WS_RECONNECT_BASE_DELAY_MS = 600;
 
 type VoiceTaskEvent = {
 	type: string;
@@ -52,6 +54,19 @@ type VoiceTaskEvent = {
 	byteLength?: number;
 	websocketPath?: string;
 };
+
+function formatVoiceSocketClose(event: CloseEvent | Event | undefined): string {
+	if (!event || typeof event !== "object" || !("code" in event)) {
+		return "语音 WebSocket 已关闭";
+	}
+	const closeEvent = event as CloseEvent;
+	const code = Number(closeEvent.code) || 0;
+	const reason = String(closeEvent.reason || "").trim();
+	const clean = closeEvent.wasClean ? "clean" : "unclean";
+	return reason
+		? `语音 WebSocket 已关闭 (code=${code}, reason=${reason}, ${clean})`
+		: `语音 WebSocket 已关闭 (code=${code}, ${clean})`;
+}
 
 function ensureVoiceOptions(data: unknown): VoiceOption[] {
 	const payload = data as { voices?: unknown };
@@ -114,6 +129,14 @@ export function useVoiceChatRuntime() {
 	);
 	const asrChunkCounterRef = useRef(0);
 	const listeningTransitionRef = useRef(0);
+	const reconnectTimerRef = useRef<number | null>(null);
+	const reconnectAttemptRef = useRef(0);
+	const reconnectInFlightRef = useRef(false);
+	const asrTaskActiveRef = useRef(false);
+	const asrStartInFlightRef = useRef(false);
+	const asrRestartPendingRef = useRef(false);
+	const ttsTaskActiveRef = useRef(false);
+	const scheduleVoiceReconnectRef = useRef<(reason: string) => void>(() => undefined);
 
 	const appendDebug = useCallback(
 		(line: string) => {
@@ -133,6 +156,13 @@ export function useVoiceChatRuntime() {
 		if (flushTimerRef.current != null) {
 			window.clearTimeout(flushTimerRef.current);
 			flushTimerRef.current = null;
+		}
+	}, []);
+
+	const clearReconnectTimer = useCallback(() => {
+		if (reconnectTimerRef.current != null) {
+			window.clearTimeout(reconnectTimerRef.current);
+			reconnectTimerRef.current = null;
 		}
 	}, []);
 
@@ -163,6 +193,16 @@ export function useVoiceChatRuntime() {
 		socketRef.current = null;
 	}, []);
 
+	const isVoiceRecoveryEligible = useCallback(() => {
+		const worker = resolveCurrentWorkerSummary(stateRef.current);
+		return (
+			stateRef.current.inputMode === "voice" &&
+			worker?.type === "agent" &&
+			!stateRef.current.activeFrontendTool &&
+			!stateRef.current.streaming
+		);
+	}, [stateRef]);
+
 	const resetVoiceSession = useCallback(
 		(options: {
 			keepCapabilities?: boolean;
@@ -170,11 +210,18 @@ export function useVoiceChatRuntime() {
 			forceTextMode?: boolean;
 		} = {}) => {
 			clearFlushTimer();
+			clearReconnectTimer();
 			cancelListeningTransition();
 			pendingBinaryRef.current = [];
 			pendingUtteranceRef.current = "";
 			startedAgentKeyRef.current = "";
 			capturePausedRef.current = false;
+			reconnectAttemptRef.current = 0;
+			reconnectInFlightRef.current = false;
+			asrTaskActiveRef.current = false;
+			asrStartInFlightRef.current = false;
+			asrRestartPendingRef.current = false;
+			ttsTaskActiveRef.current = false;
 			resetAssistantRefs();
 			playerRef.current.stopAll();
 			readyCuePlayerRef.current.stop();
@@ -225,6 +272,7 @@ export function useVoiceChatRuntime() {
 		},
 		[
 			clearFlushTimer,
+			clearReconnectTimer,
 			cancelListeningTransition,
 			dispatch,
 			patchVoiceChat,
@@ -337,7 +385,14 @@ export function useVoiceChatRuntime() {
 	const handleFatalError = useCallback(
 		(message: string) => {
 			appendDebug(message);
+			clearReconnectTimer();
 			cancelListeningTransition();
+			reconnectAttemptRef.current = 0;
+			reconnectInFlightRef.current = false;
+			asrTaskActiveRef.current = false;
+			asrStartInFlightRef.current = false;
+			asrRestartPendingRef.current = false;
+			ttsTaskActiveRef.current = false;
 			patchVoiceChat({
 				status: "error",
 				error: message,
@@ -352,6 +407,7 @@ export function useVoiceChatRuntime() {
 		},
 		[
 			appendDebug,
+			clearReconnectTimer,
 			cancelListeningTransition,
 			patchVoiceChat,
 			stateRef,
@@ -367,6 +423,30 @@ export function useVoiceChatRuntime() {
 		socket.send(JSON.stringify(payload));
 		return true;
 	}, []);
+
+	const startAsrTask = useCallback(
+		(reason: string) => {
+			if (asrTaskActiveRef.current || asrStartInFlightRef.current) {
+				return true;
+			}
+			const sent = sendJson(
+				buildVoiceAsrStartPayload(
+					QA_ASR_TASK_ID,
+					stateRef.current.voiceChat.capabilities?.asr?.defaults,
+				),
+			);
+			if (!sent) {
+				return false;
+			}
+			asrTaskActiveRef.current = false;
+			asrStartInFlightRef.current = true;
+			asrRestartPendingRef.current = false;
+			asrChunkCounterRef.current = 0;
+			appendDebug(`sent asr.start (${reason})`);
+			return true;
+		},
+		[appendDebug, sendJson, stateRef],
+	);
 
 	const ensureAudioCapture = useCallback(async () => {
 		if (capturePausedRef.current) return false;
@@ -565,6 +645,29 @@ export function useVoiceChatRuntime() {
 							const message = JSON.parse(event.data) as VoiceTaskEvent;
 							if (message.taskId === QA_ASR_TASK_ID) {
 								if (message.type === "task.started") {
+									asrTaskActiveRef.current = true;
+									asrStartInFlightRef.current = false;
+									reconnectAttemptRef.current = 0;
+									if (ttsTaskActiveRef.current) {
+										appendDebug(
+											"received task.started for asr while tts is active",
+										);
+										return;
+									}
+									if (
+										audioCaptureStateRef.current.captureStarted &&
+										!capturePausedRef.current
+									) {
+										appendDebug(
+											"received task.started for asr while capture is already active",
+										);
+										patchVoiceChat({
+											sessionActive: true,
+											error: "",
+											wsStatus: "open",
+										});
+										return;
+									}
 									appendDebug("received task.started for asr");
 									void enterListeningReady({
 										resumeCapture: false,
@@ -626,16 +729,37 @@ export function useVoiceChatRuntime() {
 									return;
 								}
 								if (message.type === "error") {
+									asrTaskActiveRef.current = false;
+									asrStartInFlightRef.current = false;
 									handleFatalError(
 										`${message.code || "ERROR"}: ${message.message || "ASR 失败"}`,
 									);
 									return;
 								}
 								if (message.type === "task.stopped") {
+									asrTaskActiveRef.current = false;
+									asrStartInFlightRef.current = false;
+									appendDebug(
+										`asr task stopped: ${
+											message.reason ? `reason=${message.reason}` : "no reason"
+										}`,
+									);
 									if (stateRef.current.inputMode === "voice") {
-										handleFatalError(
-											message.reason || "语音识别任务已停止",
+										if (ttsTaskActiveRef.current) {
+											asrRestartPendingRef.current = true;
+											appendDebug(
+												"defer asr restart until tts finishes",
+											);
+											return;
+										}
+										const restarted = startAsrTask(
+											"recover after asr task.stopped",
 										);
+										if (!restarted) {
+											scheduleVoiceReconnectRef.current(
+												message.reason || "语音识别任务已停止",
+											);
+										}
 									}
 									return;
 								}
@@ -643,6 +767,7 @@ export function useVoiceChatRuntime() {
 
 							if (message.taskId === QA_TTS_TASK_ID) {
 								if (message.type === "task.started") {
+									ttsTaskActiveRef.current = true;
 									cancelListeningTransition();
 									pendingBinaryRef.current = [];
 									playerRef.current.resetQueue();
@@ -706,12 +831,14 @@ export function useVoiceChatRuntime() {
 									return;
 								}
 								if (message.type === "error") {
+									ttsTaskActiveRef.current = false;
 									handleFatalError(
 										`${message.code || "ERROR"}: ${message.message || "TTS 失败"}`,
 									);
 									return;
 								}
 								if (message.type === "task.stopped") {
+									ttsTaskActiveRef.current = false;
 									updateAssistantNode(
 										stateRef.current.voiceChat.partialAssistantText,
 										"completed",
@@ -719,6 +846,23 @@ export function useVoiceChatRuntime() {
 									upsertChatSummary(
 										stateRef.current.voiceChat.partialAssistantText,
 									);
+									if (
+										asrRestartPendingRef.current ||
+										asrStartInFlightRef.current ||
+										!asrTaskActiveRef.current
+									) {
+										const restarted = startAsrTask(
+											asrRestartPendingRef.current
+												? "resume after tts"
+												: "recover missing asr after tts",
+										);
+										if (!restarted && !asrStartInFlightRef.current) {
+											scheduleVoiceReconnectRef.current(
+												"tts completed without active asr",
+											);
+										}
+										return;
+									}
 									void enterListeningReady({
 										resumeCapture: true,
 									}).catch(() => undefined);
@@ -748,18 +892,42 @@ export function useVoiceChatRuntime() {
 				};
 
 				socket.onerror = () => {
+					appendDebug("socket error event");
 					if (!settled) {
 						settled = true;
 						socketPromiseRef.current = null;
 						reject(new Error("语音 WebSocket 连接失败"));
 						return;
 					}
-					handleFatalError("语音 WebSocket 连接异常");
+					asrTaskActiveRef.current = false;
+					asrStartInFlightRef.current = false;
+					asrRestartPendingRef.current = false;
+					ttsTaskActiveRef.current = false;
+					patchVoiceChat({ wsStatus: "error" });
+					try {
+						if (
+							socket.readyState === WebSocket.OPEN ||
+							socket.readyState === WebSocket.CONNECTING
+						) {
+							socket.close(1011, "voice socket error");
+						}
+					} catch {
+						/* no-op */
+					}
 				};
 
-				socket.onclose = () => {
+				socket.onclose = (event) => {
 					socketPromiseRef.current = null;
 					socketRef.current = null;
+					asrTaskActiveRef.current = false;
+					asrStartInFlightRef.current = false;
+					asrRestartPendingRef.current = false;
+					ttsTaskActiveRef.current = false;
+					const closeEvent = event as CloseEvent;
+					appendDebug(
+						`socket closed: code=${String(closeEvent?.code ?? "-")}, reason=${String(closeEvent?.reason || "").trim() || "-"}, clean=${Boolean(closeEvent?.wasClean)}`,
+					);
+					const closeMessage = formatVoiceSocketClose(event);
 					const expected = expectedCloseRef.current;
 					expectedCloseRef.current = false;
 					if (expected) {
@@ -767,7 +935,11 @@ export function useVoiceChatRuntime() {
 						return;
 					}
 					if (stateRef.current.inputMode === "voice") {
-						handleFatalError("语音 WebSocket 已关闭");
+						if (isVoiceRecoveryEligible()) {
+							scheduleVoiceReconnectRef.current(closeMessage);
+							return;
+						}
+						handleFatalError(closeMessage);
 					}
 				};
 			} catch (error) {
@@ -786,14 +958,98 @@ export function useVoiceChatRuntime() {
 		enterListeningReady,
 		ensureAudioCapture,
 		handleFatalError,
+		isVoiceRecoveryEligible,
 		patchVoiceChat,
 		pauseAudioCapture,
 		resumeAudioCapture,
 		sendJson,
+		startAsrTask,
 		stateRef,
 		updateAssistantNode,
 		upsertChatSummary,
 	]);
+
+	const scheduleVoiceReconnect = useCallback(
+		(reason: string) => {
+			if (!isVoiceRecoveryEligible()) {
+				return;
+			}
+			if (reconnectTimerRef.current != null || reconnectInFlightRef.current) {
+				appendDebug(`skip reconnect scheduling: ${reason}`);
+				return;
+			}
+
+			const attempt = reconnectAttemptRef.current + 1;
+			reconnectAttemptRef.current = attempt;
+			if (attempt > MAX_VOICE_WS_RECONNECT_ATTEMPTS) {
+				handleFatalError(`语音链路恢复失败: ${reason}`);
+				return;
+			}
+
+			const delay = Math.min(
+				VOICE_WS_RECONNECT_BASE_DELAY_MS * 2 ** (attempt - 1),
+				4000,
+			);
+			patchVoiceChat({
+				status: "connecting",
+				sessionActive: false,
+				error: "",
+				wsStatus: "connecting",
+			});
+			appendDebug(
+				`schedule reconnect #${attempt} in ${delay}ms: ${reason}`,
+			);
+			reconnectTimerRef.current = window.setTimeout(() => {
+				reconnectTimerRef.current = null;
+				if (!isVoiceRecoveryEligible() || reconnectInFlightRef.current) {
+					return;
+				}
+				reconnectInFlightRef.current = true;
+				appendDebug(`reconnect attempt #${attempt}: ${reason}`);
+				void (async () => {
+					let nextReason = "";
+					try {
+						await connectSocket();
+						if (!isVoiceRecoveryEligible()) {
+							return;
+						}
+						const started = startAsrTask(
+							`reconnect attempt #${attempt}`,
+						);
+						if (!started) {
+							throw new Error("语音 WebSocket 重连后无法启动 ASR");
+						}
+						reconnectAttemptRef.current = 0;
+						patchVoiceChat({
+							error: "",
+							wsStatus: "open",
+						});
+					} catch (error) {
+						nextReason =
+							error instanceof Error ? error.message : String(error);
+						appendDebug(
+							`reconnect attempt #${attempt} failed: ${nextReason}`,
+						);
+					} finally {
+						reconnectInFlightRef.current = false;
+						if (nextReason) {
+							scheduleVoiceReconnect(nextReason);
+						}
+					}
+				})();
+			}, delay);
+		},
+		[
+			appendDebug,
+			connectSocket,
+			handleFatalError,
+			isVoiceRecoveryEligible,
+			patchVoiceChat,
+			startAsrTask,
+		],
+	);
+
+	scheduleVoiceReconnectRef.current = scheduleVoiceReconnect;
 
 	const startVoiceChatForWorker = useCallback(async () => {
 		if (!currentWorker || currentWorker.type !== "agent") {
@@ -835,31 +1091,36 @@ export function useVoiceChatRuntime() {
 			}
 			await readyCuePlayerRef.current.prime().catch(() => undefined);
 			await connectSocket();
-			asrChunkCounterRef.current = 0;
-			const sent = sendJson(
-				buildVoiceAsrStartPayload(
-					QA_ASR_TASK_ID,
-					setup.capabilities?.asr?.defaults,
-				),
-			);
+			const sent = startAsrTask("initial connect");
 			if (!sent) {
 				throw new Error("语音 WebSocket 尚未连接");
 			}
-			appendDebug("sent asr.start");
 		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			const recoverable =
+				isVoiceRecoveryEligible() &&
+				(message.includes("WebSocket") ||
+					message.includes("连接失败") ||
+					message.includes("尚未连接"));
+			if (recoverable) {
+				appendDebug(`voice start retry scheduled: ${message}`);
+				scheduleVoiceReconnect(message);
+				return;
+			}
 			startedAgentKeyRef.current = "";
-			handleFatalError(
-				error instanceof Error ? error.message : String(error),
-			);
+			handleFatalError(message);
 		}
 	}, [
+		appendDebug,
 		connectSocket,
 		currentWorker,
 		dispatch,
 		ensureVoiceSetup,
 		handleFatalError,
+		isVoiceRecoveryEligible,
 		patchVoiceChat,
-		sendJson,
+		scheduleVoiceReconnect,
+		startAsrTask,
 	]);
 
 	const stopVoiceChatForModeExit = useCallback(() => {
@@ -912,6 +1173,11 @@ export function useVoiceChatRuntime() {
 			resetVoiceSession();
 		};
 	}, [resetVoiceSession]);
+
+	useEffect(() => {
+		playerRef.current.setMuted(state.audioMuted);
+		readyCuePlayerRef.current.setMuted(state.audioMuted);
+	}, [state.audioMuted]);
 
 	useEffect(() => {
 		const voiceEligible =

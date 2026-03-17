@@ -128,6 +128,7 @@ export class PcmQueuePlayer {
 	private audioContext: AudioContext | null = null;
 	private nextPlayTime = 0;
 	private activeSources = new Set<AudioBufferSourceNode>();
+	private muted = false;
 
 	async init(): Promise<void> {
 		if (this.audioContext == null) {
@@ -149,6 +150,7 @@ export class PcmQueuePlayer {
 		sampleRate: number,
 		channels: number,
 	): Promise<void> {
+		if (this.muted) return;
 		await this.init();
 		const ctx = this.audioContext;
 		if (ctx == null) return;
@@ -212,12 +214,20 @@ export class PcmQueuePlayer {
 		}
 		this.activeSources.clear();
 	}
+
+	setMuted(muted: boolean): void {
+		this.muted = Boolean(muted);
+		if (this.muted) {
+			this.stopAll();
+		}
+	}
 }
 
 export class ReadyCuePlayer {
 	private audioContext: AudioContext | null = null;
 	private activeOscillator: OscillatorNode | null = null;
 	private activeGainNode: GainNode | null = null;
+	private muted = false;
 
 	async prime(): Promise<void> {
 		if (this.audioContext == null) {
@@ -235,6 +245,7 @@ export class ReadyCuePlayer {
 	}
 
 	async playReadyCue(): Promise<void> {
+		if (this.muted) return;
 		await this.prime();
 		const ctx = this.audioContext;
 		if (ctx == null) return;
@@ -297,6 +308,13 @@ export class ReadyCuePlayer {
 		}
 		if (gainNode != null) {
 			gainNode.disconnect();
+		}
+	}
+
+	setMuted(muted: boolean): void {
+		this.muted = Boolean(muted);
+		if (this.muted) {
+			this.stop();
 		}
 	}
 }

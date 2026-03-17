@@ -1,6 +1,8 @@
 import React from "react";
 import type { TimelineNode } from "../../context/types";
 import { useAppDispatch } from "../../context/AppContext";
+import { stripPendingSpecialFenceTail } from "../../lib/contentSegments";
+import { getVoiceRuntime } from "../../lib/voiceRuntime";
 import { MarkdownContent } from "../markdown/MarkdownContent";
 import { ViewportEmbed } from "./ViewportEmbed";
 import { MaterialIcon } from "../common/MaterialIcon";
@@ -13,6 +15,7 @@ interface ContentBlockProps {
 export const ContentBlock: React.FC<ContentBlockProps> = ({ node }) => {
 	const dispatch = useAppDispatch();
 	const text = node.text || "";
+	const streamingSafeText = stripPendingSpecialFenceTail(text);
 
 	const segments = node.segments;
 	const hasSpecialSegment = segments?.some((s) => s.kind !== "text");
@@ -22,7 +25,7 @@ export const ContentBlock: React.FC<ContentBlockProps> = ({ node }) => {
 		return (
 			<div className="timeline-content-stack">
 				<div className="timeline-text timeline-markdown">
-					<MarkdownContent content={text} />
+					<MarkdownContent content={streamingSafeText} />
 				</div>
 			</div>
 		);
@@ -72,53 +75,80 @@ export const ContentBlock: React.FC<ContentBlockProps> = ({ node }) => {
 							key={signature || idx}
 							className="timeline-tts-voice"
 						>
-							<UiButton
-								className="tts-voice-pill"
-								variant="secondary"
-								size="sm"
-								data-voice-status={status}
-								aria-expanded={expanded}
-								onClick={() => {
-									const blocks = {
-										...(node.ttsVoiceBlocks || {}),
-									};
-									const nextBlock = blocks[signature] || {
-										signature,
-										text: String(
-											segment.text || "",
-										),
-										closed: Boolean(
-											segment.closed,
-										),
-										expanded: false,
-										status: "ready" as const,
-										error: "",
-									};
-									blocks[signature] = {
-										...nextBlock,
-										expanded: !expanded,
-									};
-									dispatch({
-										type: "SET_TIMELINE_NODE",
-										id: node.id,
-										node: {
-											...node,
-											ttsVoiceBlocks: blocks,
-										},
-									});
-								}}
-							>
-								<span className="tts-voice-label">
-									tts voice
-								</span>
-								<span className="tts-voice-status">
-									{statusText}
-								</span>
-								<MaterialIcon
-									name="chevron_right"
-									className="chevron"
-								/>
-							</UiButton>
+							<div className="tts-voice-toolbar">
+								<UiButton
+									className="tts-voice-pill"
+									variant="secondary"
+									size="sm"
+									data-voice-status={status}
+									aria-expanded={expanded}
+									onClick={() => {
+										const blocks = {
+											...(node.ttsVoiceBlocks || {}),
+										};
+										const nextBlock =
+											blocks[signature] || {
+												signature,
+												text: String(
+													segment.text || "",
+												),
+												closed: Boolean(
+													segment.closed,
+												),
+												expanded: false,
+												status: "ready" as const,
+												error: "",
+											};
+										blocks[signature] = {
+											...nextBlock,
+											expanded: !expanded,
+										};
+										dispatch({
+											type: "SET_TIMELINE_NODE",
+											id: node.id,
+											node: {
+												...node,
+												ttsVoiceBlocks: blocks,
+											},
+										});
+									}}
+								>
+									<span className="tts-voice-label">
+										tts voice
+									</span>
+									<span className="tts-voice-status">
+										{statusText}
+									</span>
+									<MaterialIcon
+										name="chevron_right"
+										className="chevron"
+									/>
+								</UiButton>
+								<UiButton
+									className="tts-voice-replay"
+									variant="ghost"
+									size="sm"
+									iconOnly
+									title="重新朗读"
+									aria-label="重新朗读"
+									onClick={() => {
+										const runtime =
+											getVoiceRuntime();
+										if (!runtime) return;
+										void runtime
+											.replayTtsVoiceBlock(
+												node.contentId || "",
+												signature,
+												voiceBlock?.text ||
+													segment.text ||
+													"",
+											)
+											.catch(() => undefined);
+									}}
+								>
+									<MaterialIcon name="volume_up" />
+								</UiButton>
+							</div>
 							<div
 								className={`tts-voice-detail ${expanded ? "is-open" : ""}`}
 							>

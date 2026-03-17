@@ -9,6 +9,7 @@ export interface VoiceAudioPlayerContext {
 	activeAudioTaskId: string;
 	activeSampleRate: number;
 	activeChannels: number;
+	muted: boolean;
 	debugTtsRequest: { taskId: string } | null;
 	appendDebug: (message: string) => void;
 	setDebugStatus: (status: string) => void;
@@ -68,6 +69,9 @@ export function resetPlayback(context: VoiceAudioPlayerContext): void {
 }
 
 export function playPcm(context: VoiceAudioPlayerContext, bufferLike: ArrayBuffer | ArrayBufferView): boolean {
+	if (context.muted) {
+		return false;
+	}
 	const audioContext = ensureAudioContext(context);
 	if (!audioContext) {
 		context.setDebugStatus("error: browser audio context unavailable");

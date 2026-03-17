@@ -1,6 +1,8 @@
 import { safeJsonParse } from './actionRuntime';
 import { parseViewportBlocks } from './viewportParser';
 
+const SPECIAL_FENCE_HEADERS = ['```viewport', '```tts-voice'] as const;
+
 export interface ContentSegment {
   kind: 'text' | 'viewport' | 'ttsVoice';
   text?: string;
@@ -22,6 +24,50 @@ function matchesFenceHeader(rawHeader: string, token: string): boolean {
   const lower = String(rawHeader || '').trim().toLowerCase();
   if (lower === `\`\`\`${token}`) return true;
   return lower.startsWith(`\`\`\`${token} `) || lower.startsWith(`\`\`\`${token}\t`);
+}
+
+function matchesPendingSpecialFenceHeader(rawHeader: string): boolean {
+  const lower = String(rawHeader || '').trimEnd().toLowerCase();
+  if (!lower.startsWith('```') || lower === '```') return false;
+  return SPECIAL_FENCE_HEADERS.some((header) => (
+    header.startsWith(lower)
+    || lower === header
+    || lower.startsWith(`${header} `)
+    || lower.startsWith(`${header}\t`)
+  ));
+}
+
+function findPendingSpecialFenceTailStart(raw: string): number {
+  let cursor = 0;
+  while (cursor < raw.length) {
+    const start = raw.indexOf('```', cursor);
+    if (start === -1) return -1;
+
+    if (start > 0 && raw[start - 1] !== '\n') {
+      cursor = start + 3;
+      continue;
+    }
+
+    const lineEnd = raw.indexOf('\n', start);
+    if (lineEnd !== -1) {
+      cursor = start + 3;
+      continue;
+    }
+
+    return matchesPendingSpecialFenceHeader(raw.slice(start)) ? start : -1;
+  }
+
+  return -1;
+}
+
+export function stripPendingSpecialFenceTail(text: string): string {
+  const raw = String(text ?? '');
+  if (!raw) return '';
+
+  const pendingStart = findPendingSpecialFenceTailStart(raw);
+  if (pendingStart === -1) return raw;
+
+  return raw.slice(0, pendingStart).replace(/[ \t]*\n?$/, '');
 }
 
 function findNextSpecialFence(raw: string, fromIndex: number): { kind: 'viewport' | 'ttsVoice'; start: number; contentStart: number } | null {
@@ -78,7 +124,7 @@ export function viewportSignature(contentId: string, block: { key?: string; payl
 }
 
 export function parseContentSegments(contentId: string, text: string): ContentSegment[] {
-  const raw = String(text ?? '');
+  const raw = stripPendingSpecialFenceTail(String(text ?? ''));
   if (!raw.trim()) return [];
 
   const lowerRaw = raw.toLowerCase();

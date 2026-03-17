@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useAppState, useAppDispatch } from "../../context/AppContext";
 import { ACCESS_TOKEN_STORAGE_KEY } from "../../context/constants";
-import type { VoiceCapabilities } from "../../context/types";
+import type { ConversationMode, VoiceCapabilities } from "../../context/types";
 import {
 	getVoiceCapabilitiesFlexible,
 	setAccessToken,
@@ -77,6 +77,17 @@ export const SettingsModal: React.FC = () => {
 		const next = current === "dark" ? "light" : "dark";
 		document.documentElement.setAttribute("data-theme", next);
 	};
+
+	const handleConversationModeChange = useCallback(
+		(mode: ConversationMode) => {
+			window.dispatchEvent(
+				new CustomEvent("agent:set-conversation-mode", {
+					detail: { mode },
+				}),
+			);
+		},
+		[],
+	);
 
 	const mapAsrStatus = useCallback((status: string, errorText?: string) => {
 		if (errorText) return `error: ${errorText}`;
@@ -284,6 +295,41 @@ export const SettingsModal: React.FC = () => {
 					>
 						关闭
 					</UiButton>
+				</div>
+
+				<div className="field-group">
+					<label>对话模式</label>
+					<div
+						className="settings-segmented"
+						role="tablist"
+						aria-label="对话模式"
+					>
+						<UiButton
+							variant="ghost"
+							size="sm"
+							className={`settings-segmented-btn ${state.conversationMode === "worker" ? "is-active" : ""}`}
+							role="tab"
+							aria-selected={state.conversationMode === "worker"}
+							active={state.conversationMode === "worker"}
+							onClick={() => handleConversationModeChange("worker")}
+						>
+							员工模式
+						</UiButton>
+						<UiButton
+							variant="ghost"
+							size="sm"
+							className={`settings-segmented-btn ${state.conversationMode === "chat" ? "is-active" : ""}`}
+							role="tab"
+							aria-selected={state.conversationMode === "chat"}
+							active={state.conversationMode === "chat"}
+							onClick={() => handleConversationModeChange("chat")}
+						>
+							聊天模式
+						</UiButton>
+					</div>
+					<p className="settings-hint">
+						控制侧边栏优先以员工会话还是普通聊天视角展示，默认使用员工模式。
+					</p>
 				</div>
 
 				<div className="field-group">

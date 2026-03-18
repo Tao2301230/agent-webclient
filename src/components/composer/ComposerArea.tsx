@@ -1,4 +1,10 @@
-import React, { useRef, useCallback, useState, useEffect, useMemo } from "react";
+import React, {
+	useRef,
+	useCallback,
+	useState,
+	useEffect,
+	useMemo,
+} from "react";
 import { useAppState, useAppDispatch } from "../../context/AppContext";
 import { MentionSuggest } from "./MentionSuggest";
 import { SlashPalette } from "./SlashPalette";
@@ -45,7 +51,9 @@ export const ComposerArea: React.FC = () => {
 	const hasPendingSteers = state.pendingSteers.length > 0;
 	const hasSteerDraft = Boolean(state.steerDraft.trim());
 	const shouldShowSteerBar =
-		state.streaming && !isFrontendActive && (hasSteerDraft || hasPendingSteers);
+		state.streaming &&
+		!isFrontendActive &&
+		(hasSteerDraft || hasPendingSteers);
 	const timelineEntries = useMemo(() => {
 		return state.timelineOrder
 			.map((id) => state.timelineNodes.get(id))
@@ -59,13 +67,18 @@ export const ComposerArea: React.FC = () => {
 		() => getFilteredSlashCommands(inputValue),
 		[inputValue],
 	);
-	const currentWorker = useMemo(() => resolveCurrentWorkerSummary(state), [state]);
+	const currentWorker = useMemo(
+		() => resolveCurrentWorkerSummary(state),
+		[state],
+	);
 	const voiceModeAvailable = currentWorker?.type === "agent";
 	const isVoiceMode = state.inputMode === "voice";
 	const voiceUserPreview = state.voiceChat.partialUserText || "等待你开口...";
 	const voiceAssistantPreview =
 		state.voiceChat.partialAssistantText ||
-		(state.voiceChat.status === "thinking" ? "正在组织回答..." : "等待回答...");
+		(state.voiceChat.status === "thinking"
+			? "正在组织回答..."
+			: "等待回答...");
 	const voiceStatusText = useMemo(() => {
 		const status = state.voiceChat.status;
 		if (status === "connecting") return "正在连接语聊...";
@@ -91,12 +104,11 @@ export const ComposerArea: React.FC = () => {
 		state.voiceChat.partialAssistantText.trim(),
 	);
 	const showSlashPalette =
-		!isVoiceMode
-		&&
-		!isFrontendActive
-		&& !state.commandModal.open
-		&& !slashDismissed
-		&& slashCommands.length > 0;
+		!isVoiceMode &&
+		!isFrontendActive &&
+		!state.commandModal.open &&
+		!slashDismissed &&
+		slashCommands.length > 0;
 
 	const autoresize = useCallback(() => {
 		const el = textareaRef.current;
@@ -167,7 +179,11 @@ export const ComposerArea: React.FC = () => {
 			document.removeEventListener("mousedown", onPointerDown);
 			document.removeEventListener("keydown", onKeyDown);
 			window.removeEventListener("resize", updateSlashPopoverPosition);
-			window.removeEventListener("scroll", updateSlashPopoverPosition, true);
+			window.removeEventListener(
+				"scroll",
+				updateSlashPopoverPosition,
+				true,
+			);
 		};
 	}, [inputValue, showSlashPalette]);
 
@@ -452,7 +468,8 @@ export const ComposerArea: React.FC = () => {
 			stopSpeechInput();
 		}
 		if (showSlashPalette) {
-			const selected = slashCommands[activeSlashIndex] || slashCommands[0];
+			const selected =
+				slashCommands[activeSlashIndex] || slashCommands[0];
 			if (selected) {
 				void executeSlashCommand(selected.id);
 			}
@@ -697,9 +714,7 @@ export const ComposerArea: React.FC = () => {
 
 	useEffect(() => {
 		const onSetDraft = (event: Event) => {
-			const draft = String(
-				(event as CustomEvent).detail?.draft || "",
-			);
+			const draft = String((event as CustomEvent).detail?.draft || "");
 			setInputValue(draft);
 			setSlashDismissed(false);
 			if (draft.startsWith("/")) {
@@ -821,7 +836,9 @@ export const ComposerArea: React.FC = () => {
 					onCancel={handleCancelSteer}
 				/>
 			)}
-			<div className={`composer-layout ${isFrontendActive ? "is-frontend-active" : ""}`}>
+			<div
+				className={`composer-layout ${isFrontendActive ? "is-frontend-active" : ""}`}
+			>
 				<div
 					ref={composerPillRef}
 					className={`composer-pill ${isFrontendActive ? "hidden" : ""} ${isVoiceMode ? "is-voice-mode" : ""}`}
@@ -829,7 +846,10 @@ export const ComposerArea: React.FC = () => {
 					<div className="composer-mode-shell">
 						<div className="composer-mode-main">
 							{isVoiceMode ? (
-								<div className="voice-chat-panel" aria-live="polite">
+								<div
+									className={`voice-chat-panel is-${state.voiceChat.status}`}
+									aria-live="polite"
+								>
 									<div className="voice-chat-panel-header">
 										<div className="voice-chat-panel-identity">
 											<div
@@ -841,9 +861,6 @@ export const ComposerArea: React.FC = () => {
 												<span />
 											</div>
 											<div className="voice-chat-panel-heading">
-												<div className="voice-chat-panel-kicker">
-													实时语聊
-												</div>
 												<div className="voice-chat-panel-title-row">
 													<div className="voice-chat-panel-title">
 														语聊中
@@ -851,7 +868,8 @@ export const ComposerArea: React.FC = () => {
 													<div className="voice-chat-worker">
 														当前员工：
 														<strong>
-															{state.voiceChat.currentAgentName ||
+															{state.voiceChat
+																.currentAgentName ||
 																currentWorker?.displayName ||
 																"--"}
 														</strong>
@@ -896,9 +914,6 @@ export const ComposerArea: React.FC = () => {
 										>
 											<span className="voice-chat-connection-dot" />
 											{voiceConnectionText}
-										</div>
-										<div className="voice-chat-panel-caption">
-											一问一答语聊模式
 										</div>
 									</div>
 									{state.voiceChat.error && (
@@ -991,9 +1006,15 @@ export const ComposerArea: React.FC = () => {
 										variant="secondary"
 										size="sm"
 										iconOnly
-										disabled={isFrontendActive || !speechSupported}
+										disabled={
+											isFrontendActive || !speechSupported
+										}
 										onClick={toggleSpeechInput}
-										aria-label={speechListening ? "停止语音输入" : "语音输入"}
+										aria-label={
+											speechListening
+												? "停止语音输入"
+												: "语音输入"
+										}
 										title={speechStatus}
 									>
 										<MaterialIcon name="mic" />
@@ -1012,9 +1033,7 @@ export const ComposerArea: React.FC = () => {
 									</UiButton>
 								</>
 							) : (
-								<>
-									<div className="voice-mode-hint">{voiceConnectionText}</div>
-								</>
+								<></>
 							)}
 						</div>
 					</div>

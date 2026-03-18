@@ -1518,45 +1518,67 @@ textarea {
 }
 
 .voice-chat-panel {
+  --voice-accent: var(--accent-electric);
+  --voice-assistant-accent: #e1a05d;
   position: relative;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--line-soft) 86%, transparent);
-  border-radius: 24px;
+  border: 1px solid rgba(226, 233, 242, 0.82);
+  border-radius: 20px;
   background:
-    radial-gradient(circle at 0% 0%, rgba(255, 206, 150, 0.16), transparent 30%),
-    radial-gradient(circle at 100% 100%, rgba(120, 182, 255, 0.1), transparent 34%),
-    linear-gradient(180deg, color-mix(in srgb, var(--bg-elev-2) 99%, #fff9f2), color-mix(in srgb, var(--bg-input) 97%, #f7fbff));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.44);
-  padding: 18px;
+    radial-gradient(circle at 6% 10%, rgba(255, 227, 193, 0.14), transparent 24%),
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--voice-accent) 4%, transparent), transparent 28%),
+    linear-gradient(160deg,
+      rgba(255, 255, 255, 0.98) 0%,
+      rgba(250, 251, 254, 0.98) 48%,
+      rgba(246, 249, 254, 0.98) 100%);
+  box-shadow:
+    0 18px 38px rgba(17, 39, 76, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(18px) saturate(112%);
+  padding: 15px 15px 13px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 11px;
 }
 
 .voice-chat-panel::before {
   content: "";
   position: absolute;
-  inset: 0 auto auto 0;
-  width: 100%;
-  height: 1px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.64), transparent);
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.52), transparent 24%),
+    radial-gradient(circle at 82% 100%, color-mix(in srgb, var(--voice-accent) 3%, transparent), transparent 30%);
+  pointer-events: none;
 }
 
 .voice-chat-panel::after {
   content: "";
   position: absolute;
-  top: -32px;
-  right: -16px;
-  width: 128px;
-  height: 128px;
+  inset: auto -28px -40px auto;
+  width: 170px;
+  height: 122px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(157, 203, 255, 0.16), transparent 68%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--voice-accent) 5%, transparent), transparent 72%);
   pointer-events: none;
+  filter: blur(10px);
+}
+
+.voice-chat-panel.is-listening {
+  --voice-accent: #1f9a56;
+}
+
+.voice-chat-panel.is-speaking {
+  --voice-accent: #d97a23;
+}
+
+.voice-chat-panel.is-error {
+  --voice-accent: var(--accent-danger);
 }
 
 .voice-chat-panel-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
@@ -1565,36 +1587,39 @@ textarea {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
 }
 
 .voice-chat-orb {
   position: relative;
   flex: 0 0 auto;
-  width: 56px;
-  height: 56px;
-  border-radius: 18px;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
   display: flex;
   align-items: flex-end;
   justify-content: center;
   gap: 4px;
-  padding: 0 12px 12px;
-  color: var(--accent-electric);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(233, 244, 255, 0.98));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 12px 24px rgba(22, 53, 93, 0.12);
+  padding: 0 9px 8px;
+  color: color-mix(in srgb, var(--voice-accent) 86%, #25425f);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), color-mix(in srgb, var(--voice-accent) 6%, #f7fbff));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.94),
+    0 8px 18px rgba(17, 39, 76, 0.05);
 }
 
 .voice-chat-orb::after {
   content: "";
   position: absolute;
   inset: -6px;
-  border-radius: 22px;
-  border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--voice-accent) 11%, transparent);
   opacity: 0;
 }
 
 .voice-chat-orb span {
-  width: 6px;
+  width: 4px;
   border-radius: 999px;
   background: currentColor;
   transform-origin: center bottom;
@@ -1602,17 +1627,17 @@ textarea {
 }
 
 .voice-chat-orb span:nth-child(1) {
-  height: 12px;
+  height: 10px;
   animation-delay: -0.15s;
 }
 
 .voice-chat-orb span:nth-child(2) {
-  height: 22px;
+  height: 18px;
   animation-delay: -0.35s;
 }
 
 .voice-chat-orb span:nth-child(3) {
-  height: 16px;
+  height: 13px;
   animation-delay: -0.55s;
 }
 
@@ -1655,72 +1680,67 @@ textarea {
 .voice-chat-panel-heading {
   min-width: 0;
   display: grid;
-  gap: 6px;
-}
-
-.voice-chat-panel-kicker {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-muted);
+  gap: 0;
 }
 
 .voice-chat-panel-title-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
+  gap: 6px 10px;
 }
 
 .voice-chat-panel-title {
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 800;
   color: var(--ink-1);
-  letter-spacing: -0.04em;
+  letter-spacing: -0.03em;
 }
 
 .voice-chat-status {
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 8px;
-  max-width: min(100%, 320px);
+  gap: 6px;
+  max-width: min(100%, 210px);
   border-radius: 999px;
-  padding: 8px 12px;
-  font-size: 12px;
+  padding: 5px 10px;
+  font-size: 10px;
   font-weight: 800;
-  background: rgba(22, 119, 255, 0.1);
-  color: var(--accent-electric);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), color-mix(in srgb, var(--voice-accent) 5%, rgba(247, 250, 255, 0.96)));
+  border: 1px solid rgba(229, 235, 243, 0.86);
+  color: color-mix(in srgb, var(--voice-accent) 78%, #29435f);
   white-space: normal;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.46);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 4px 10px rgba(17, 39, 76, 0.03);
 }
 
 .voice-chat-status-dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: currentColor;
-  box-shadow: 0 0 0 5px color-mix(in srgb, currentColor 18%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 14%, transparent);
 }
 
 .voice-chat-status.is-listening {
-  background: rgba(40, 167, 69, 0.12);
+  background: linear-gradient(180deg, rgba(250, 255, 252, 0.9), rgba(238, 250, 243, 0.96));
   color: #208a46;
 }
 
 .voice-chat-status.is-speaking {
-  background: rgba(255, 122, 24, 0.12);
+  background: linear-gradient(180deg, rgba(255, 252, 249, 0.9), rgba(255, 244, 233, 0.96));
   color: #d7670f;
 }
 
 .voice-chat-status.is-thinking {
-  background: rgba(22, 119, 255, 0.12);
+  background: linear-gradient(180deg, rgba(248, 252, 255, 0.9), rgba(239, 247, 255, 0.96));
   color: var(--accent-electric);
 }
 
 .voice-chat-status.is-error {
-  background: rgba(211, 59, 88, 0.12);
+  background: linear-gradient(180deg, rgba(255, 249, 250, 0.9), rgba(253, 239, 243, 0.96));
   color: var(--accent-danger);
 }
 
@@ -1729,62 +1749,93 @@ textarea {
   display: inline-flex;
   align-items: center;
   max-width: 100%;
-  min-height: 28px;
-  padding: 0 12px;
+  min-height: 24px;
+  padding: 0 9px;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--line-soft) 74%, transparent);
-  background: rgba(255, 255, 255, 0.58);
-  font-size: 12px;
+  border: 1px solid rgba(231, 237, 244, 0.82);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(248, 250, 254, 0.84));
+  font-size: 10px;
+  font-weight: 700;
   color: var(--ink-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 4px 10px rgba(17, 39, 76, 0.025);
 }
 
 .voice-chat-worker strong {
-  margin-left: 6px;
+  margin-left: 5px;
   color: var(--ink-1);
 }
 
 .voice-chat-summary-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 0;
   align-items: start;
+  border-radius: 18px;
+  border: 1px solid rgba(229, 235, 243, 0.82);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(250, 252, 255, 0.72));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 8px 20px rgba(17, 39, 76, 0.025);
 }
 
 .voice-chat-snippet {
   position: relative;
   display: grid;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
-  min-height: 82px;
-  padding: 14px 15px 16px;
-  border-radius: 18px;
-  border: 1px solid color-mix(in srgb, var(--line-soft) 78%, transparent);
-  background: rgba(255, 255, 255, 0.54);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58);
+  min-height: 78px;
+  padding: 13px 16px 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.04));
 }
 
 .voice-chat-snippet-user {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(242, 247, 255, 0.9));
+    linear-gradient(180deg, rgba(246, 249, 255, 0.2), rgba(246, 249, 255, 0.04));
 }
 
 .voice-chat-snippet-assistant {
   background:
-    linear-gradient(180deg, rgba(255, 251, 247, 0.72), rgba(255, 244, 233, 0.9));
+    linear-gradient(180deg, rgba(255, 249, 243, 0.22), rgba(255, 249, 243, 0.04));
+}
+
+.voice-chat-snippet+.voice-chat-snippet {
+  border-left: 1px solid rgba(231, 237, 244, 0.8);
 }
 
 .voice-chat-snippet-label {
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
   font-weight: 800;
-  color: var(--ink-muted);
-  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--ink-muted) 94%, var(--voice-accent) 6%);
+  letter-spacing: 0.03em;
+}
+
+.voice-chat-snippet-label::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--line-strong) 44%, transparent);
+}
+
+.voice-chat-snippet-user .voice-chat-snippet-label::before {
+  background: color-mix(in srgb, var(--voice-accent) 52%, transparent);
+}
+
+.voice-chat-snippet-assistant .voice-chat-snippet-label::before {
+  background: color-mix(in srgb, var(--voice-assistant-accent) 52%, transparent);
 }
 
 .voice-chat-snippet-text {
-  min-height: 32px;
+  min-height: 24px;
   font-size: 14px;
   line-height: 1.55;
   color: var(--ink-1);
@@ -1793,6 +1844,7 @@ textarea {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   word-break: break-word;
+  letter-spacing: -0.01em;
 }
 
 .voice-chat-snippet-text.is-placeholder {
@@ -1800,30 +1852,40 @@ textarea {
 }
 
 .voice-chat-error {
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--accent-danger) 10%, var(--bg-elev-2));
-  border: 1px solid color-mix(in srgb, var(--accent-danger) 24%, transparent);
-  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255, 249, 250, 0.92), rgba(255, 241, 244, 0.94));
+  border: 1px solid rgba(246, 221, 227, 0.92);
+  font-size: 10px;
   font-weight: 600;
   color: var(--accent-danger);
   white-space: normal;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88);
 }
 
 .voice-chat-panel-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
+  padding-top: 2px;
 }
 
 .voice-chat-connection {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
+  gap: 7px;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(248, 250, 254, 0.82));
+  border: 1px solid rgba(229, 235, 243, 0.84);
+  font-size: 10px;
   font-weight: 700;
   color: var(--ink-2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 4px 10px rgba(17, 39, 76, 0.025);
 }
 
 .voice-chat-connection-dot {
@@ -1850,7 +1912,9 @@ textarea {
 }
 
 .voice-chat-panel-caption {
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--ink-muted);
@@ -1991,8 +2055,8 @@ textarea {
   }
 
   .voice-chat-panel {
-    padding: 16px;
-    border-radius: 20px;
+    padding: 14px;
+    border-radius: 18px;
   }
 
   .voice-chat-panel-header {
@@ -2002,7 +2066,7 @@ textarea {
 
   .voice-chat-summary-grid {
     grid-template-columns: 1fr;
-    gap: 10px;
+    gap: 0;
   }
 
   .voice-chat-panel-identity {
@@ -2010,7 +2074,21 @@ textarea {
   }
 
   .voice-chat-panel-title {
-    font-size: 18px;
+    font-size: 16px;
+  }
+
+  .voice-chat-status {
+    align-self: flex-start;
+  }
+
+  .voice-chat-snippet {
+    min-height: 72px;
+    padding: 12px 14px;
+  }
+
+  .voice-chat-snippet+.voice-chat-snippet {
+    border-left: none;
+    border-top: 1px solid rgba(231, 237, 244, 0.8);
   }
 
   .voice-chat-panel-footer {
@@ -4004,7 +4082,6 @@ textarea {
 }
 
 .tts-voice-toolbar .tts-voice-pill {
-  flex: 1 1 auto;
   width: auto;
 }
 
